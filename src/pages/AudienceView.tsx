@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Music, ListMusic } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Music, ListMusic, PlusCircle } from 'lucide-react';
 import { useUsername } from '@/hooks/useUsername';
 import { useSongs } from '@/hooks/useSongs';
-import { useRequests, useCreateRequest, useCheckDuplicateRequest } from '@/hooks/useRequests';
+import { useRequests, useCreateRequest, useCreateCustomRequest, useCheckDuplicateRequest } from '@/hooks/useRequests';
 import { usePaymentHandles } from '@/hooks/useSettings';
 import { UsernameModal } from '@/components/audience/UsernameModal';
 import { SearchBar } from '@/components/audience/SearchBar';
 import { SongCard } from '@/components/audience/SongCard';
 import { RequestModal } from '@/components/audience/RequestModal';
+import { CustomRequestModal } from '@/components/audience/CustomRequestModal';
 import { QueueItem } from '@/components/audience/QueueItem';
 import { toast } from 'sonner';
 import type { Song } from '@/types/vibequeue';
@@ -18,11 +20,13 @@ export default function AudienceView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isCustomRequestModalOpen, setIsCustomRequestModalOpen] = useState(false);
 
   const { data: songs, isLoading: songsLoading } = useSongs(searchQuery);
   const { data: requests } = useRequests();
   const { handles: paymentHandles } = usePaymentHandles();
   const createRequest = useCreateRequest();
+  const createCustomRequest = useCreateCustomRequest();
   const checkDuplicate = useCheckDuplicateRequest();
 
   const handleSongClick = async (song: Song) => {
@@ -47,6 +51,23 @@ export default function AudienceView() {
       toast.success('Request submitted!');
       setIsRequestModalOpen(false);
       setSelectedSong(null);
+    } catch (error) {
+      toast.error('Failed to submit request');
+    }
+  };
+
+  const handleCustomSubmitRequest = async (title: string, artist: string, isTipped: boolean) => {
+    if (!username) return;
+
+    try {
+      await createCustomRequest.mutateAsync({
+        title,
+        artist,
+        username,
+        isTipped,
+      });
+      toast.success('Custom request submitted!');
+      setIsCustomRequestModalOpen(false);
     } catch (error) {
       toast.error('Failed to submit request');
     }
@@ -119,9 +140,17 @@ export default function AudienceView() {
               ) : songs?.length === 0 ? (
                 <div className="text-center py-12">
                   <Music className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">
+                  <p className="text-muted-foreground mb-4">
                     {searchQuery ? 'No songs found' : 'No songs available'}
                   </p>
+                  <Button
+                    onClick={() => setIsCustomRequestModalOpen(true)}
+                    variant="outline"
+                    className="border-secondary/50 text-secondary hover:bg-secondary/10"
+                  >
+                    <PlusCircle className="w-4 h-4 mr-2" />
+                    Request a different song
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -210,6 +239,14 @@ export default function AudienceView() {
         paymentHandles={paymentHandles}
         onSubmit={handleSubmitRequest}
         isLoading={createRequest.isPending}
+      />
+
+      <CustomRequestModal
+        open={isCustomRequestModalOpen}
+        onClose={() => setIsCustomRequestModalOpen(false)}
+        paymentHandles={paymentHandles}
+        onSubmit={handleCustomSubmitRequest}
+        isLoading={createCustomRequest.isPending}
       />
     </div>
   );

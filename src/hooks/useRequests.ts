@@ -80,6 +80,54 @@ export function useCreateRequest() {
   });
 }
 
+export function useCreateCustomRequest() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      title,
+      artist,
+      username,
+      isTipped,
+    }: {
+      title: string;
+      artist: string;
+      username: string;
+      isTipped: boolean;
+    }) => {
+      // First, create the song with is_available = false (custom request)
+      const { data: song, error: songError } = await supabase
+        .from('songs')
+        .insert({
+          title,
+          artist,
+          is_available: false,
+        })
+        .select()
+        .single();
+
+      if (songError) throw songError;
+
+      // Then create the request
+      const { data, error } = await supabase
+        .from('requests')
+        .insert({
+          song_id: song.id,
+          requester_username: username,
+          is_tipped: isTipped,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['requests'] });
+    },
+  });
+}
+
 export function useUpdateRequestStatus() {
   const queryClient = useQueryClient();
 
