@@ -62,40 +62,57 @@ serve(async (req) => {
       );
     }
 
-    // Parse CSV - find header row and data
+    // Parse CSV - Row 1 is header, data starts at row 2
     // Sheet format: Track Name, Artist Name(s), Genre
-    const songs = [];
-    let headerFound = false;
-    
-    for (let i = 0; i < lines.length; i++) {
-      const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const songs: { title: string; artist: string; genre: string | null; is_available: boolean }[] = [];
+    const seen = new Set<string>();
+    for (let i = 1; i < lines.length; i++) {
+      // Handle CSV with quoted fields containing commas
+      const row = lines[i];
+      const cols = [];
+      let current = '';
+      let inQuotes = false;
       
-      // Skip until we find the header row
-      if (!headerFound) {
-        if (cols[0]?.toLowerCase().includes('track') || cols[0]?.toLowerCase().includes('title')) {
-          headerFound = true;
+      for (let j = 0; j < row.length; j++) {
+        const char = row[j];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          cols.push(current.trim().replace(/^"|"$/g, ''));
+          current = '';
+        } else {
+          current += char;
         }
-        continue;
       }
+      cols.push(current.trim().replace(/^"|"$/g, ''));
       
       // Skip empty rows
       if (!cols[0] || cols[0].trim() === '') continue;
       
-      songs.push({
-        title: cols[0] || 'Unknown',
-        artist: cols[1] || 'Unknown',
-        genre: cols[2] || null,
-        is_available: true,
-      });
+      const key = `${cols[0]}|||${cols[1]}`.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        songs.push({
+          title: cols[0] || 'Unknown',
+          artist: cols[1] || 'Unknown',
+          genre: cols[2] || null,
+          is_available: true,
+        });
+      }
     }
+    
+    console.log(`Parsed ${songs.length} unique songs from CSV`);
 
-    // Upsert songs (update existing, insert new)
-    const { error } = await supabase
-      .from('songs')
-      .upsert(songs, { onConflict: 'title,artist', ignoreDuplicates: false });
-
-    if (error) {
-      console.error('Upsert error:', error);
+    // Clear existing songs and insert fresh data
+    await supabase.from('songs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    
+    // Insert in batches of 50
+    for (let i = 0; i < songs.length; i += 50) {
+      const batch = songs.slice(i, i + 50);
+      const { error } = await supabase.from('songs').insert(batch);
+      if (error) {
+        console.error('Insert error:', error);
+      }
     }
 
     return new Response(
