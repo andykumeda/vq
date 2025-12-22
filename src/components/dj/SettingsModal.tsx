@@ -10,9 +10,10 @@ import { toast } from 'sonner';
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
+  djPin: string;
 }
 
-export function SettingsModal({ open, onClose }: SettingsModalProps) {
+export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
   const { data: settings } = useSettings();
   const updateSetting = useUpdateSetting();
 
@@ -40,7 +41,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const handleSave = async () => {
     try {
       const updates = Object.entries(formData).map(([key, value]) =>
-        updateSetting.mutateAsync({ key, value })
+        updateSetting.mutateAsync({ key, value, pin: djPin })
       );
       await Promise.all(updates);
       toast.success('Settings saved!');

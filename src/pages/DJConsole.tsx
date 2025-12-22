@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export default function DJConsole() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [djPin, setDjPin] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -55,8 +56,11 @@ export default function DJConsole() {
   const handleSyncLibrary = async () => {
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-google-sheets');
+      const { data, error } = await supabase.functions.invoke('sync-google-sheets', {
+        body: { pin: djPin }
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast.success(`Synced ${data?.count || 0} songs from Google Sheets`);
       refetch();
     } catch (error: any) {
@@ -64,6 +68,11 @@ export default function DJConsole() {
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const handlePinSuccess = (pin: string) => {
+    setDjPin(pin);
+    setIsAuthenticated(true);
   };
 
   const nowPlaying = requests?.find((r) => r.status === 'playing');
@@ -84,7 +93,7 @@ export default function DJConsole() {
       <PinModal
         open={!isAuthenticated}
         onVerify={verifyPin}
-        onSuccess={() => setIsAuthenticated(true)}
+        onSuccess={handlePinSuccess}
       />
 
       {/* Header */}
@@ -222,6 +231,7 @@ export default function DJConsole() {
       <SettingsModal
         open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        djPin={djPin}
       />
     </div>
   );
