@@ -38,15 +38,13 @@ export function useUpdateSetting() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ key, value }: { key: string; value: string }) => {
-      const { data, error } = await supabase
-        .from('settings')
-        .update({ value })
-        .eq('key', key)
-        .select()
-        .single();
+    mutationFn: async ({ key, value, pin }: { key: string; value: string; pin: string }) => {
+      const { data, error } = await supabase.functions.invoke('update-settings', {
+        body: { key, value, pin }
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       return data;
     },
     onSuccess: () => {
@@ -56,9 +54,21 @@ export function useUpdateSetting() {
 }
 
 export function useVerifyPin() {
-  const { data: settings } = useSettings();
-
-  return (pin: string): boolean => {
-    return settings?.dj_pin === pin;
+  return async (pin: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-dj-pin', {
+        body: { pin }
+      });
+      
+      if (error) {
+        console.error('PIN verification error:', error);
+        return false;
+      }
+      
+      return data?.valid === true;
+    } catch (error) {
+      console.error('PIN verification error:', error);
+      return false;
+    }
   };
 }

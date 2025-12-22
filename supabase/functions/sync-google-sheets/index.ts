@@ -16,6 +16,36 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Verify DJ PIN before allowing sync
+    let pin: string | null = null;
+    try {
+      const body = await req.json();
+      pin = body?.pin;
+    } catch {
+      // No body provided
+    }
+
+    if (!pin || typeof pin !== 'string') {
+      return new Response(
+        JSON.stringify({ error: 'DJ PIN is required to sync library' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verify PIN against stored value
+    const { data: pinSetting, error: pinError } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'dj_pin')
+      .single();
+
+    if (pinError || pinSetting?.value !== pin) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid DJ PIN' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get Google Sheet URL from settings
     const { data: sheetSetting } = await supabase
       .from('settings')

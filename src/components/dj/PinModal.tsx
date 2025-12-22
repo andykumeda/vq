@@ -2,29 +2,42 @@ import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
-import { Music, Lock } from 'lucide-react';
+import { Music, Lock, Loader2 } from 'lucide-react';
 
 interface PinModalProps {
   open: boolean;
-  onVerify: (pin: string) => boolean;
-  onSuccess: () => void;
+  onVerify: (pin: string) => Promise<boolean>;
+  onSuccess: (pin: string) => void;
 }
 
 export function PinModal({ open, onVerify, onSuccess }: PinModalProps) {
   const [pin, setPin] = useState('');
   const [error, setError] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
 
-  const handleComplete = (value: string) => {
+  const handleComplete = async (value: string) => {
     setPin(value);
     if (value.length === 4) {
-      if (onVerify(value)) {
-        onSuccess();
-      } else {
+      setIsVerifying(true);
+      try {
+        const isValid = await onVerify(value);
+        if (isValid) {
+          onSuccess(value);
+        } else {
+          setError(true);
+          setTimeout(() => {
+            setPin('');
+            setError(false);
+          }, 1000);
+        }
+      } catch (err) {
         setError(true);
         setTimeout(() => {
           setPin('');
           setError(false);
         }, 1000);
+      } finally {
+        setIsVerifying(false);
       }
     }
   };
@@ -45,6 +58,7 @@ export function PinModal({ open, onVerify, onSuccess }: PinModalProps) {
             maxLength={4}
             value={pin}
             onChange={handleComplete}
+            disabled={isVerifying}
             className={error ? 'animate-shake' : ''}
           >
             <InputOTPGroup>
@@ -54,6 +68,13 @@ export function PinModal({ open, onVerify, onSuccess }: PinModalProps) {
               <InputOTPSlot index={3} className={error ? 'border-destructive' : ''} />
             </InputOTPGroup>
           </InputOTP>
+
+          {isVerifying && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Verifying...
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-destructive animate-fade-in">
