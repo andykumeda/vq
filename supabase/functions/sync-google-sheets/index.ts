@@ -62,18 +62,31 @@ serve(async (req) => {
       );
     }
 
-    // Parse CSV (skip header row)
+    // Parse CSV - find header row and data
+    // Sheet format: Track Name, Artist Name(s), Genre
     const songs = [];
-    for (let i = 1; i < lines.length; i++) {
+    let headerFound = false;
+    
+    for (let i = 0; i < lines.length; i++) {
       const cols = lines[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-      if (cols.length >= 2) {
-        songs.push({
-          title: cols[1] || 'Unknown',
-          artist: cols[2] || 'Unknown',
-          genre: cols[3] || null,
-          is_available: cols[4]?.toLowerCase() !== 'false',
-        });
+      
+      // Skip until we find the header row
+      if (!headerFound) {
+        if (cols[0]?.toLowerCase().includes('track') || cols[0]?.toLowerCase().includes('title')) {
+          headerFound = true;
+        }
+        continue;
       }
+      
+      // Skip empty rows
+      if (!cols[0] || cols[0].trim() === '') continue;
+      
+      songs.push({
+        title: cols[0] || 'Unknown',
+        artist: cols[1] || 'Unknown',
+        genre: cols[2] || null,
+        is_available: true,
+      });
     }
 
     // Upsert songs (update existing, insert new)
