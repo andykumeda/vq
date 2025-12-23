@@ -93,47 +93,98 @@ serve(async (req) => {
 
     const sheetId = sheetIdMatch[1];
     
-    // Get sheet names + gids using the public worksheets feed (requires "Publish to web")
-    // This is the most reliable way to discover all tabs without hardcoding.
-    const feedUrl = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/full?alt=json`;
-
-    type FeedEntry = {
-      title?: { $t?: string };
-      id?: { $t?: string };
-      link?: { rel?: string; href?: string }[];
-    };
+    // Discover sheet tabs (name + gid) without hardcoding.
+    // We first try parsing the Google Sheets HTML (works for "Anyone with link" shared sheets).
+    // If that fails, we fall back to the public worksheets feed (requires "Publish to web").
 
     const sheetTabs: { name: string; gid: string }[] = [];
 
+    const pushUniqueTab = (name: string, gid: string) => {
+      const trimmed = name.trim();
+      if (!trimmed || !gid) return;
+      if (!sheetTabs.some((t) => t.gid === gid)) sheetTabs.push({ name: trimmed, gid });
+    };
+
+    // 1) Parse HTML for sheet metadata
     try {
-      const feedRes = await fetch(feedUrl);
-      if (!feedRes.ok) {
-        console.log(`Worksheets feed not accessible (status=${feedRes.status}). Spreadsheet likely not published to web.`);
-      } else {
-        const feedJson = await feedRes.json();
-        const entries: FeedEntry[] = feedJson?.feed?.entry ?? [];
+      const htmlUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?usp=sharing`;
+      const htmlRes = await fetch(htmlUrl);
+      if (htmlRes.ok) {
+        const html = await htmlRes.text();
 
-        for (const entry of entries) {
-          const name = entry?.title?.$t?.trim();
-          if (!name) continue;
+        // Common patterns in bootstrap data:
+        //   "sheetId":0,..."title":"My Tab"
+        //   "title":"My Tab",..."sheetId":0
+        const patterns = [
+          /"sheetId"\s*:\s*(\d+)[\s\S]*?"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g,
+          /"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"[\s\S]*?"sheetId"\s*:\s*(\d+)/g,
+        ];
 
-          // gid typically appears in the entry id or link
-          const idText = entry?.id?.$t ?? '';
-          const hrefText = (entry?.link ?? []).map((l) => l.href).join(' ');
-          const combined = `${idText} ${hrefText}`;
-          const gidMatch = combined.match(/gid=(\d+)/);
+        for (const re of patterns) {
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(html))) {
+            const gid = re === patterns[0] ? m[1] : m[2];
+            const rawTitle = re === patterns[0] ? m[2] : m[1];
+            const name = rawTitle
+              .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+              .replace(/\\n/g, ' ')
+              .replace(/\\"/g, '"')
+              .trim();
 
-          if (gidMatch?.[1]) {
-            sheetTabs.push({ name, gid: gidMatch[1] });
-          } else {
-            console.log(`Could not find gid for sheet: ${name}`);
+            // Avoid accidental matches from unrelated embedded strings
+            if (name && name.length <= 80) pushUniqueTab(name, gid);
           }
         }
 
-        console.log(`Discovered ${sheetTabs.length} sheets via feed: ${sheetTabs.map((s) => s.name).join(', ')}`);
+        if (sheetTabs.length > 0) {
+          console.log(`Discovered ${sheetTabs.length} sheets via HTML: ${sheetTabs.map((s) => s.name).join(', ')}`);
+        }
       }
     } catch (e) {
-      console.log('Failed to read worksheets feed:', e);
+      console.log('Failed to parse sheet HTML for tabs:', e);
+    }
+
+    // 2) Fallback: public worksheets feed (requires "Publish to web")
+    if (sheetTabs.length === 0) {
+      const feedUrl = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/full?alt=json`;
+
+      type FeedEntry = {
+        title?: { $t?: string };
+        id?: { $t?: string };
+        link?: { rel?: string; href?: string }[];
+      };
+
+      try {
+        const feedRes = await fetch(feedUrl);
+        if (!feedRes.ok) {
+          console.log(`Worksheets feed not accessible (status=${feedRes.status}). Spreadsheet likely not published to web.`);
+        } else {
+          const feedJson = await feedRes.json();
+          const entries: FeedEntry[] = feedJson?.feed?.entry ?? [];
+
+          for (const entry of entries) {
+            const name = entry?.title?.$t?.trim();
+            if (!name) continue;
+
+            const idText = entry?.id?.$t ?? '';
+            const hrefText = (entry?.link ?? []).map((l) => l.href).join(' ');
+            const combined = `${idText} ${hrefText}`;
+            const gidMatch = combined.match(/gid=(\d+)/);
+
+            if (gidMatch?.[1]) {
+              pushUniqueTab(name, gidMatch[1]);
+            } else {
+              console.log(`Could not find gid for sheet: ${name}`);
+            }
+          }
+
+          if (sheetTabs.length > 0) {
+            console.log(`Discovered ${sheetTabs.length} sheets via feed: ${sheetTabs.map((s) => s.name).join(', ')}`);
+          }
+        }
+      } catch (e) {
+        console.log('Failed to read worksheets feed:', e);
+      }
     }
 
     // If we have sheet tabs, import each tab using gid-based CSV export (reliable)
