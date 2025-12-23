@@ -24,11 +24,6 @@ export function SongCard({ song, onClick, disabled }: SongCardProps) {
           <h3 className="font-semibold text-foreground truncate">{song.title}</h3>
           <p className="text-sm text-muted-foreground truncate">{song.artist}</p>
         </div>
-        {song.genre && (
-          <span className="text-xs px-2 py-1 bg-muted rounded-full text-muted-foreground">
-            {song.genre}
-          </span>
-        )}
       </div>
     </Card>
   );

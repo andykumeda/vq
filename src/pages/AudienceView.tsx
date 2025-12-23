@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Music, ListMusic, PlusCircle } from 'lucide-react';
 import { useUsername } from '@/hooks/useUsername';
 import { useSongs } from '@/hooks/useSongs';
+import { useGenres } from '@/hooks/useGenres';
 import { useRequests, useCreateRequest, useCreateCustomRequest, useCheckDuplicateRequest } from '@/hooks/useRequests';
 import { usePaymentHandles } from '@/hooks/useSettings';
 import { UsernameModal } from '@/components/audience/UsernameModal';
 import { SearchBar } from '@/components/audience/SearchBar';
+import { GenreFilter } from '@/components/audience/GenreFilter';
 import { SongCard } from '@/components/audience/SongCard';
 import { RequestModal } from '@/components/audience/RequestModal';
 import { CustomRequestModal } from '@/components/audience/CustomRequestModal';
@@ -18,11 +20,13 @@ import type { Song } from '@/types/vibequeue';
 export default function AudienceView() {
   const { username, setUsername } = useUsername();
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isCustomRequestModalOpen, setIsCustomRequestModalOpen] = useState(false);
 
-  const { data: songs, isLoading: songsLoading } = useSongs(searchQuery);
+  const { data: genres = [] } = useGenres();
+  const { data: songs, isLoading: songsLoading } = useSongs(searchQuery, selectedGenre);
   const { data: requests } = useRequests();
   const { handles: paymentHandles } = usePaymentHandles();
   const createRequest = useCreateRequest();
@@ -130,6 +134,11 @@ export default function AudienceView() {
           <TabsContent value="songs" className="mt-0">
             <div className="p-4 space-y-4">
               <SearchBar value={searchQuery} onChange={setSearchQuery} />
+              <GenreFilter
+                genres={genres}
+                selectedGenre={selectedGenre}
+                onSelectGenre={setSelectedGenre}
+              />
 
               {songsLoading ? (
                 <div className="space-y-3">
