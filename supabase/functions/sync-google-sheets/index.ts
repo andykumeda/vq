@@ -94,8 +94,11 @@ serve(async (req) => {
     const sheetId = sheetIdMatch[1];
     
     // Discover sheet tabs (name + gid) without hardcoding.
-    // We first try parsing the Google Sheets HTML (works for "Anyone with link" shared sheets).
-    // If that fails, we fall back to the public worksheets feed (requires "Publish to web").
+    // Strategy:
+    //  1) Parse the Google Sheets HTML for (gid + title) pairs (works for "Anyone with link" sharing).
+    //  2) If that fails, try the public worksheets feed (requires "Publish to web").
+    //  3) If we still don't have multiple tabs, probe gids by attempting CSV exports and infer the tab name
+    //     from the Content-Disposition filename.
 
     const sheetTabs: { name: string; gid: string }[] = [];
 
@@ -105,6 +108,13 @@ serve(async (req) => {
       if (!sheetTabs.some((t) => t.gid === gid)) sheetTabs.push({ name: trimmed, gid });
     };
 
+    const decodeGoogleString = (raw: string) =>
+      raw
+        .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/\\n/g, ' ')
+        .replace(/\\"/g, '"')
+        .trim();
+
     // 1) Parse HTML for sheet metadata
     try {
       const htmlUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?usp=sharing`;
@@ -112,32 +122,33 @@ serve(async (req) => {
       if (htmlRes.ok) {
         const html = await htmlRes.text();
 
-        // Common patterns in bootstrap data:
-        //   "sheetId":0,..."title":"My Tab"
-        //   "title":"My Tab",..."sheetId":0
-        const patterns = [
+        // Patterns observed in Google Sheets bootstrap data.
+        // We try multiple patterns because Google changes markup frequently.
+        const patterns: RegExp[] = [
+          // "sheetId":0 ... "title":"Rock"
           /"sheetId"\s*:\s*(\d+)[\s\S]*?"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g,
+          // "title":"Rock" ... "sheetId":0
           /"title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"[\s\S]*?"sheetId"\s*:\s*(\d+)/g,
+          // "gid":123 ... "name":"Rock"
+          /"gid"\s*:\s*(\d+)[\s\S]*?"name"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/g,
+          // "name":"Rock" ... "gid":123
+          /"name"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"[\s\S]*?"gid"\s*:\s*(\d+)/g,
         ];
 
         for (const re of patterns) {
           let m: RegExpExecArray | null;
           while ((m = re.exec(html))) {
-            const gid = re === patterns[0] ? m[1] : m[2];
-            const rawTitle = re === patterns[0] ? m[2] : m[1];
-            const name = rawTitle
-              .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-              .replace(/\\n/g, ' ')
-              .replace(/\\"/g, '"')
-              .trim();
-
-            // Avoid accidental matches from unrelated embedded strings
-            if (name && name.length <= 80) pushUniqueTab(name, gid);
+            const gid = m[1] && /^\d+$/.test(m[1]) ? m[1] : m[2];
+            const rawTitle = gid === m[1] ? m[2] : m[1];
+            const name = decodeGoogleString(rawTitle);
+            if (name && name.length <= 120) pushUniqueTab(name, gid);
           }
         }
 
         if (sheetTabs.length > 0) {
-          console.log(`Discovered ${sheetTabs.length} sheets via HTML: ${sheetTabs.map((s) => s.name).join(', ')}`);
+          console.log(
+            `Discovered ${sheetTabs.length} sheets via HTML: ${sheetTabs.map((s) => `${s.name}(gid=${s.gid})`).join(', ')}`
+          );
         }
       }
     } catch (e) {
@@ -157,7 +168,9 @@ serve(async (req) => {
       try {
         const feedRes = await fetch(feedUrl);
         if (!feedRes.ok) {
-          console.log(`Worksheets feed not accessible (status=${feedRes.status}). Spreadsheet likely not published to web.`);
+          console.log(
+            `Worksheets feed not accessible (status=${feedRes.status}). Spreadsheet likely not published to web.`
+          );
         } else {
           const feedJson = await feedRes.json();
           const entries: FeedEntry[] = feedJson?.feed?.entry ?? [];
@@ -179,7 +192,9 @@ serve(async (req) => {
           }
 
           if (sheetTabs.length > 0) {
-            console.log(`Discovered ${sheetTabs.length} sheets via feed: ${sheetTabs.map((s) => s.name).join(', ')}`);
+            console.log(
+              `Discovered ${sheetTabs.length} sheets via feed: ${sheetTabs.map((s) => `${s.name}(gid=${s.gid})`).join(', ')}`
+            );
           }
         }
       } catch (e) {
@@ -187,7 +202,63 @@ serve(async (req) => {
       }
     }
 
-    // If we have sheet tabs, import each tab using gid-based CSV export (reliable)
+    // 3) If we still don't have multiple tabs, probe gids and infer sheet names from filename.
+    // This is slower, so we keep the probe bounded.
+    if (sheetTabs.length <= 1) {
+      const maxSheetsToFind = 25;
+      const maxGidToProbe = 500; // bounded scan
+      let consecutiveFails = 0;
+      const maxConsecutiveFails = 60;
+
+      console.log(`Probing gids for additional sheets (current=${sheetTabs.length})...`);
+
+      for (let gid = 0; gid <= maxGidToProbe; gid++) {
+        if (sheetTabs.length >= maxSheetsToFind) break;
+        if (consecutiveFails >= maxConsecutiveFails) break;
+        const gidStr = String(gid);
+        if (sheetTabs.some((t) => t.gid === gidStr)) continue;
+
+        const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gidStr}`;
+        const res = await fetch(csvUrl);
+
+        // 200 doesn't guarantee a real sheet; some responses are tiny error pages.
+        if (!res.ok) {
+          consecutiveFails++;
+          continue;
+        }
+
+        const contentType = res.headers.get('content-type') ?? '';
+        if (!contentType.includes('text/csv') && !contentType.includes('application/vnd.ms-excel')) {
+          consecutiveFails++;
+          continue;
+        }
+
+        const disposition = res.headers.get('content-disposition') ?? '';
+        const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i);
+        const filenameRaw = filenameMatch?.[1] ?? filenameMatch?.[2] ?? '';
+        const filename = decodeURIComponent(filenameRaw);
+        const inferredName = filename.replace(/\.csv$/i, '').trim();
+
+        const csvText = await res.text();
+        const lines = csvText.split('\n').filter((l) => l.trim());
+        if (lines.length < 2) {
+          consecutiveFails++;
+          continue;
+        }
+
+        const name = inferredName && inferredName.length <= 120 ? inferredName : `Sheet ${gidStr}`;
+        pushUniqueTab(name, gidStr);
+        consecutiveFails = 0;
+      }
+
+      if (sheetTabs.length > 1) {
+        console.log(
+          `After probing, discovered ${sheetTabs.length} sheets: ${sheetTabs.map((s) => `${s.name}(gid=${s.gid})`).join(', ')}`
+        );
+      }
+    }
+
+    // If we have sheet tabs, import each tab using gid-based CSV export
     if (sheetTabs.length > 0) {
       const allSongs: { title: string; artist: string; genre: string; is_available: boolean }[] = [];
       const seen = new Set<string>();
