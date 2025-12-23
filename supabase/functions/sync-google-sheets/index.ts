@@ -110,9 +110,9 @@ serve(async (req) => {
     }
 
     // Discover sheet tabs (name + gid) without hardcoding.
-    // IMPORTANT: gid values are typically large random integers (not 0..N), so probing ranges will miss tabs.
+    // IMPORTANT: gid values are often large random integers (not 0..N), so probing ranges will miss tabs.
     // Strategy:
-    //  1) Fetch the sheet HTML and extract any gid=123 occurrences.
+    //  1) Fetch the sheet HTML and extract gids from multiple patterns (gid=123, "gid":123, and gid\u003d123).
     //  2) For each gid, validate by fetching CSV export and infer tab name from Content-Disposition filename.
     //  3) If we can't discover tabs, fall back to single-sheet mode (genre in 3rd column).
 
@@ -121,6 +121,21 @@ serve(async (req) => {
       const trimmed = name.trim();
       if (!trimmed || !gid) return;
       if (!sheetTabs.some((t) => t.gid === gid)) sheetTabs.push({ name: trimmed, gid });
+    };
+
+    const collectGidsFromHtml = (html: string): string[] => {
+      const gids: string[] = [];
+
+      // gid=123
+      for (const m of html.matchAll(/\bgid=(\d+)\b/g)) gids.push(m[1]);
+
+      // "gid":123
+      for (const m of html.matchAll(/"gid"\s*:\s*(\d+)/g)) gids.push(m[1]);
+
+      // gid\u003d123 (escaped equals)
+      for (const m of html.matchAll(/gid\\u003d(\d+)/g)) gids.push(m[1]);
+
+      return Array.from(new Set(gids));
     };
 
     // 1) HTML discovery
@@ -133,13 +148,11 @@ serve(async (req) => {
         },
       });
 
-      console.log(
-        `Sheet HTML fetch status=${htmlRes.status} content-type=${htmlRes.headers.get("content-type")}`
-      );
+      console.log(`Sheet HTML fetch status=${htmlRes.status} content-type=${htmlRes.headers.get("content-type")}`);
 
       if (htmlRes.ok) {
         const html = await htmlRes.text();
-        const gids = Array.from(new Set(Array.from(html.matchAll(/\bgid=(\d+)\b/g)).map((m) => m[1])));
+        const gids = collectGidsFromHtml(html);
 
         console.log(`Found ${gids.length} candidate gids in HTML`);
 
@@ -147,7 +160,6 @@ serve(async (req) => {
           const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
           const res = await fetch(csvUrl);
           if (!res.ok) continue;
-
           if (!looksLikeCsvResponse(res.headers.get("content-type"))) continue;
 
           const csvText = await res.text();
@@ -156,16 +168,13 @@ serve(async (req) => {
 
           const filename = extractFilenameFromContentDisposition(res.headers.get("content-disposition") ?? "");
           const inferredName = filename.replace(/\.csv$/i, "").trim();
-
           pushUnique(inferredName || `Sheet ${gid}`, gid);
         }
       }
 
       if (sheetTabs.length > 0) {
         console.log(
-          `Discovered ${sheetTabs.length} sheets via HTML gids: ${sheetTabs
-            .map((s) => `${s.name}(gid=${s.gid})`)
-            .join(", ")}`
+          `Discovered ${sheetTabs.length} sheets via HTML gids: ${sheetTabs.map((s) => `${s.name}(gid=${s.gid})`).join(", ")}`
         );
       }
     } catch (e) {
