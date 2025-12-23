@@ -8,8 +8,6 @@ interface GenreFilterProps {
 }
 
 export function GenreFilter({ genres, selectedGenre, onSelectGenre }: GenreFilterProps) {
-  if (genres.length === 0) return null;
-
   return (
     <ScrollArea className="w-full whitespace-nowrap">
       <div className="flex gap-2 pb-2">
