@@ -93,39 +93,60 @@ serve(async (req) => {
 
     const sheetId = sheetIdMatch[1];
     
-    // Get sheet names using a different approach - try common sheet name patterns
-    // or let user specify sheets via sheet URL params like #gid=0
-    
-    // First, try to get sheet info by fetching the HTML page
+    // Get sheet names by fetching the feed endpoint which works for public sheets
     const sheetNames: string[] = [];
+    const sheetGids: number[] = [];
     
     try {
-      const htmlResponse = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`, {
-        headers: { 'Accept': 'text/html' }
-      });
+      // Try fetching the HTML and looking for sheet info in the embedded JSON data
+      const htmlResponse = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/edit?usp=sharing`);
       const htmlText = await htmlResponse.text();
       
-      // Look for sheet names in various patterns Google uses
-      // Pattern 1: sheet-button elements with data-sheet-name
-      const pattern1 = /data-sheet-name="([^"]+)"/g;
-      let match;
-      while ((match = pattern1.exec(htmlText)) !== null) {
-        const name = match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-        if (!sheetNames.includes(name)) sheetNames.push(name);
+      // Look for the sheet metadata in the page's embedded data
+      // Google embeds sheet info in a specific JavaScript variable
+      const jsonMatch = htmlText.match(/\{"sheets":\[(\{[^\]]+\})\]/);
+      if (jsonMatch) {
+        try {
+          const sheetsData = JSON.parse(`[${jsonMatch[1]}]`);
+          for (const sheet of sheetsData) {
+            if (sheet.name) {
+              sheetNames.push(sheet.name);
+              if (sheet.sheetId !== undefined) sheetGids.push(sheet.sheetId);
+            }
+          }
+        } catch (e) {
+          console.log('Could not parse embedded JSON:', e);
+        }
       }
       
-      // Pattern 2: Looking for sheet names in JavaScript data
-      const pattern2 = /"name":"([^"]+)","index":\d+,"sheetId":\d+/g;
-      while ((match = pattern2.exec(htmlText)) !== null) {
-        const name = match[1].replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-        if (!sheetNames.includes(name)) sheetNames.push(name);
+      // Alternative: Look for gid patterns with names
+      if (sheetNames.length === 0) {
+        // Pattern: "name":"SheetName","index":0,"sheetId":123
+        const pattern = /"name":"([^"]+)","index":\d+,"sheetId":(\d+)/g;
+        let match;
+        while ((match = pattern.exec(htmlText)) !== null) {
+          const name = match[1].replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex) => 
+            String.fromCharCode(parseInt(hex, 16))
+          );
+          if (!sheetNames.includes(name)) {
+            sheetNames.push(name);
+            sheetGids.push(parseInt(match[2]));
+          }
+        }
       }
       
-      // Pattern 3: sheet tab names in specific format
-      const pattern3 = /<li[^>]*class="[^"]*sheet-tab[^"]*"[^>]*>([^<]+)</g;
-      while ((match = pattern3.exec(htmlText)) !== null) {
-        const name = match[1].trim();
-        if (name && !sheetNames.includes(name)) sheetNames.push(name);
+      // Try another pattern commonly found in Google Sheets HTML
+      if (sheetNames.length === 0) {
+        const pattern2 = /\["([^"]+)",\d+,\d+,(\d+),/g;
+        let match;
+        while ((match = pattern2.exec(htmlText)) !== null) {
+          const name = match[1];
+          // Filter out obvious non-sheet names
+          if (name && name.length < 50 && !name.includes('http') && !sheetNames.includes(name)) {
+            sheetNames.push(name);
+            sheetGids.push(parseInt(match[2]));
+          }
+        }
       }
       
       console.log(`Found ${sheetNames.length} sheets via HTML parsing: ${sheetNames.join(', ')}`);
@@ -133,10 +154,123 @@ serve(async (req) => {
       console.log('Could not parse HTML for sheet names:', err);
     }
     
-    // If we couldn't find sheet names, fall back to fetching just the first sheet
-    // and look for genre in 3rd column
+    // If HTML parsing failed, try to discover sheets by testing common gids
     if (sheetNames.length === 0) {
-      console.log('Could not extract sheet names, falling back to single sheet mode with genre column');
+      console.log('HTML parsing failed, trying to discover sheets via gid probing...');
+      
+      // Try gid=0 first (default sheet), then probe a few more
+      const testGids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+      
+      for (const gid of testGids) {
+        try {
+          const testUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+          const response = await fetch(testUrl, { method: 'HEAD' });
+          
+          if (response.ok) {
+            // Sheet exists, now get its content to find the name
+            // We'll use the gid as a temporary identifier
+            sheetGids.push(gid);
+            console.log(`Found sheet at gid=${gid}`);
+          }
+        } catch (e) {
+          // Sheet doesn't exist at this gid
+        }
+      }
+      
+      // If we found sheets by gid, fetch them
+      if (sheetGids.length > 0) {
+        console.log(`Discovered ${sheetGids.length} sheets by gid probing`);
+        
+        const allSongs: { title: string; artist: string; genre: string; is_available: boolean }[] = [];
+        const seen = new Set<string>();
+        const foundGenres: string[] = [];
+        
+        for (const gid of sheetGids) {
+          const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+          
+          try {
+            const response = await fetch(csvUrl);
+            if (!response.ok) continue;
+            
+            const csvText = await response.text();
+            const lines = csvText.split('\n').filter(line => line.trim());
+            
+            if (lines.length < 2) continue;
+            
+            // Try to infer sheet name from first row header or use gid as fallback
+            // Check if there's a pattern in the data that suggests a genre/category
+            const headerCols = parseCSVRow(lines[0]);
+            
+            // Use the response URL or a pattern to identify sheet name
+            // For now, we'll need to look at the data or use gid
+            let sheetName = `Sheet ${gid + 1}`;
+            
+            // Check content-disposition header for sheet name
+            const contentDisposition = response.headers.get('content-disposition');
+            if (contentDisposition) {
+              const nameMatch = contentDisposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i);
+              if (nameMatch) {
+                // Extract sheet name from filename like "Spreadsheet Name - SheetName.csv"
+                const filename = decodeURIComponent(nameMatch[1]);
+                const parts = filename.replace('.csv', '').split(' - ');
+                if (parts.length > 1) {
+                  sheetName = parts[parts.length - 1].trim();
+                }
+              }
+            }
+            
+            if (!foundGenres.includes(sheetName)) {
+              foundGenres.push(sheetName);
+            }
+            
+            for (let i = 1; i < lines.length; i++) {
+              const cols = parseCSVRow(lines[i]);
+              if (!cols[0] || cols[0].trim() === '') continue;
+              
+              const title = cols[0] || 'Unknown';
+              const artist = cols[1] || 'Unknown';
+              const key = `${title}|||${artist}`.toLowerCase();
+              
+              if (!seen.has(key)) {
+                seen.add(key);
+                allSongs.push({
+                  title,
+                  artist,
+                  genre: sheetName,
+                  is_available: true,
+                });
+              }
+            }
+            
+            console.log(`Parsed ${lines.length - 1} rows from gid=${gid} (${sheetName})`);
+          } catch (err) {
+            console.error(`Error fetching gid=${gid}:`, err);
+          }
+        }
+        
+        if (allSongs.length > 0) {
+          await supabase.from('songs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          
+          for (let i = 0; i < allSongs.length; i += 50) {
+            const batch = allSongs.slice(i, i + 50);
+            const { error } = await supabase.from('songs').insert(batch);
+            if (error) console.error('Insert error:', error);
+          }
+          
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              count: allSongs.length, 
+              sheets: foundGenres,
+              message: `Imported ${allSongs.length} songs from ${foundGenres.length} sheets`
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+      
+      // Final fallback: single sheet mode with genre column
+      console.log('Falling back to single sheet mode with genre column');
       
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
       const response = await fetch(csvUrl);
@@ -158,9 +292,7 @@ serve(async (req) => {
       }
 
       const songs: { title: string; artist: string; genre: string | null; is_available: boolean }[] = [];
-      const seen = new Set<string>();
-      
-      // Collect unique genres from the data
+      const seenSongs = new Set<string>();
       const genreSet = new Set<string>();
       
       for (let i = 1; i < lines.length; i++) {
@@ -174,8 +306,8 @@ serve(async (req) => {
         if (genre) genreSet.add(genre);
         
         const key = `${title}|||${artist}`.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
+        if (!seenSongs.has(key)) {
+          seenSongs.add(key);
           songs.push({
             title,
             artist,
