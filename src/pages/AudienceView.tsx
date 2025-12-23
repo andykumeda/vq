@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Music, ListMusic, PlusCircle } from 'lucide-react';
+import { Music, ListMusic, PlusCircle, ArrowUp } from 'lucide-react';
 import { useUsername } from '@/hooks/useUsername';
 import { useSongs } from '@/hooks/useSongs';
 import { useGenres } from '@/hooks/useGenres';
@@ -24,6 +24,20 @@ export default function AudienceView() {
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isCustomRequestModalOpen, setIsCustomRequestModalOpen] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // Show back-to-top button when scrolled down
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 300);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const { data: genres = [] } = useGenres();
   const { data: songs, isLoading: songsLoading } = useSongs(searchQuery, selectedGenre);
@@ -257,6 +271,17 @@ export default function AudienceView() {
         onSubmit={handleCustomSubmitRequest}
         isLoading={createCustomRequest.isPending}
       />
+
+      {/* Back to Top Button */}
+      {showBackToTop && (
+        <Button
+          onClick={scrollToTop}
+          size="icon"
+          className="fixed bottom-6 right-6 z-50 rounded-full shadow-lg bg-primary hover:bg-primary/90"
+        >
+          <ArrowUp className="h-5 w-5" />
+        </Button>
+      )}
     </div>
   );
 }

@@ -93,30 +93,50 @@ serve(async (req) => {
 
     const sheetId = sheetIdMatch[1];
     
-    // First, get the spreadsheet metadata to find all sheet names
-    const metadataUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?format=json`;
+    // Get sheet names using a different approach - try common sheet name patterns
+    // or let user specify sheets via sheet URL params like #gid=0
     
-    // Try to get sheet names by fetching the HTML and parsing it
-    // Google Sheets exposes sheet names in the page content
-    const htmlResponse = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`);
-    const htmlText = await htmlResponse.text();
-    
-    // Extract sheet names from the HTML - Google embeds sheet data in the page
+    // First, try to get sheet info by fetching the HTML page
     const sheetNames: string[] = [];
     
-    // Try to find sheet tabs in the HTML - they appear in a specific format
-    const sheetTabMatches = htmlText.matchAll(/gid=(\d+)[^>]*>([^<]+)</g);
-    for (const match of sheetTabMatches) {
-      const name = match[2].trim();
-      if (name && !sheetNames.includes(name)) {
-        sheetNames.push(name);
+    try {
+      const htmlResponse = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/edit`, {
+        headers: { 'Accept': 'text/html' }
+      });
+      const htmlText = await htmlResponse.text();
+      
+      // Look for sheet names in various patterns Google uses
+      // Pattern 1: sheet-button elements with data-sheet-name
+      const pattern1 = /data-sheet-name="([^"]+)"/g;
+      let match;
+      while ((match = pattern1.exec(htmlText)) !== null) {
+        const name = match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        if (!sheetNames.includes(name)) sheetNames.push(name);
       }
+      
+      // Pattern 2: Looking for sheet names in JavaScript data
+      const pattern2 = /"name":"([^"]+)","index":\d+,"sheetId":\d+/g;
+      while ((match = pattern2.exec(htmlText)) !== null) {
+        const name = match[1].replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+        if (!sheetNames.includes(name)) sheetNames.push(name);
+      }
+      
+      // Pattern 3: sheet tab names in specific format
+      const pattern3 = /<li[^>]*class="[^"]*sheet-tab[^"]*"[^>]*>([^<]+)</g;
+      while ((match = pattern3.exec(htmlText)) !== null) {
+        const name = match[1].trim();
+        if (name && !sheetNames.includes(name)) sheetNames.push(name);
+      }
+      
+      console.log(`Found ${sheetNames.length} sheets via HTML parsing: ${sheetNames.join(', ')}`);
+    } catch (err) {
+      console.log('Could not parse HTML for sheet names:', err);
     }
     
-    // If we couldn't find sheet names from HTML, try to infer from common patterns
-    // Fallback: just fetch the first sheet and use genre column
+    // If we couldn't find sheet names, fall back to fetching just the first sheet
+    // and look for genre in 3rd column
     if (sheetNames.length === 0) {
-      console.log('Could not extract sheet names, falling back to single sheet mode');
+      console.log('Could not extract sheet names, falling back to single sheet mode with genre column');
       
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
       const response = await fetch(csvUrl);
@@ -140,17 +160,26 @@ serve(async (req) => {
       const songs: { title: string; artist: string; genre: string | null; is_available: boolean }[] = [];
       const seen = new Set<string>();
       
+      // Collect unique genres from the data
+      const genreSet = new Set<string>();
+      
       for (let i = 1; i < lines.length; i++) {
         const cols = parseCSVRow(lines[i]);
         if (!cols[0] || cols[0].trim() === '') continue;
         
-        const key = `${cols[0]}|||${cols[1]}`.toLowerCase();
+        const title = cols[0] || 'Unknown';
+        const artist = cols[1] || 'Unknown';
+        const genre = cols[2]?.trim() || null;
+        
+        if (genre) genreSet.add(genre);
+        
+        const key = `${title}|||${artist}`.toLowerCase();
         if (!seen.has(key)) {
           seen.add(key);
           songs.push({
-            title: cols[0] || 'Unknown',
-            artist: cols[1] || 'Unknown',
-            genre: cols[2] || null,
+            title,
+            artist,
+            genre,
             is_available: true,
           });
         }
@@ -165,7 +194,12 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, count: songs.length, sheets: ['default'] }),
+        JSON.stringify({ 
+          success: true, 
+          count: songs.length, 
+          sheets: ['default'],
+          genres: Array.from(genreSet).sort()
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
