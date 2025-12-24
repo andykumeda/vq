@@ -9,7 +9,7 @@ interface GenreFilterProps {
   onClearAll: () => void;
 }
 
-export function GenreFilter({ genres, selectedGenres, onToggleGenre, onClearAll }: GenreFilterProps) {
+export function GenreFilter({ genres, selectedGenres = [], onToggleGenre, onClearAll }: GenreFilterProps) {
   const allSelected = selectedGenres.length === 0;
 
   return (
