@@ -2,9 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { Song } from '@/types/vibequeue';
 
-export function useSongs(searchQuery: string = '', genreFilter: string | null = null) {
+export function useSongs(searchQuery: string = '', genreFilters: string[] = []) {
   return useQuery({
-    queryKey: ['songs', searchQuery, genreFilter],
+    queryKey: ['songs', searchQuery, genreFilters],
     queryFn: async () => {
       let query = supabase
         .from('songs')
@@ -16,8 +16,8 @@ export function useSongs(searchQuery: string = '', genreFilter: string | null = 
         query = query.or(`title.ilike.%${searchQuery}%,artist.ilike.%${searchQuery}%`);
       }
 
-      if (genreFilter) {
-        query = query.eq('genre', genreFilter);
+      if (genreFilters.length > 0) {
+        query = query.in('genre', genreFilters);
       }
 
       const { data, error } = await query;

@@ -20,7 +20,7 @@ import type { Song } from '@/types/vibequeue';
 export default function AudienceView() {
   const { username, setUsername } = useUsername();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [isCustomRequestModalOpen, setIsCustomRequestModalOpen] = useState(false);
@@ -40,7 +40,7 @@ export default function AudienceView() {
   };
 
   const { data: genres = [] } = useGenres();
-  const { data: songs, isLoading: songsLoading } = useSongs(searchQuery, selectedGenre);
+  const { data: songs, isLoading: songsLoading } = useSongs(searchQuery, selectedGenres);
   const { data: requests } = useRequests();
   const { handles: paymentHandles } = usePaymentHandles();
   const createRequest = useCreateRequest();
@@ -150,8 +150,15 @@ export default function AudienceView() {
               <SearchBar value={searchQuery} onChange={setSearchQuery} />
               <GenreFilter
                 genres={genres}
-                selectedGenre={selectedGenre}
-                onSelectGenre={setSelectedGenre}
+                selectedGenres={selectedGenres}
+                onToggleGenre={(genre) => {
+                  setSelectedGenres((prev) =>
+                    prev.includes(genre)
+                      ? prev.filter((g) => g !== genre)
+                      : [...prev, genre]
+                  );
+                }}
+                onClearAll={() => setSelectedGenres([])}
               />
 
               {songsLoading ? (
