@@ -132,6 +132,21 @@ export default function AudienceView() {
 
       {/* Main Content */}
       <main className="pb-20">
+        {nowPlaying && (
+          <section className="border-b border-border/50 bg-gradient-to-b from-primary/5 to-transparent">
+            <div className="p-4">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                Now Playing
+              </h3>
+              <QueueItem
+                request={nowPlaying}
+                isOwn={nowPlaying.requester_username === username}
+              />
+            </div>
+          </section>
+        )}
+
         <Tabs defaultValue="songs" className="w-full">
           <TabsList className="w-full h-12 bg-muted/50 rounded-none border-b border-border/50">
             <TabsTrigger
@@ -208,19 +223,6 @@ export default function AudienceView() {
 
           <TabsContent value="queue" className="mt-0">
             <div className="p-4 space-y-6">
-              {nowPlaying && (
-                <section>
-                  <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                    Now Playing
-                  </h3>
-                  <QueueItem
-                    request={nowPlaying}
-                    isOwn={nowPlaying.requester_username === username}
-                  />
-                </section>
-              )}
-
               {upNext.length > 0 && (
                 <section>
                   <h3 className="text-sm font-medium text-muted-foreground mb-3">
