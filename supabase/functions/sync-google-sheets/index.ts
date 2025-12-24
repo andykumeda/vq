@@ -32,21 +32,6 @@ function parseSheetIdFromUrl(url: string): string | null {
   return m?.[1] ?? null;
 }
 
-function extractFilenameFromContentDisposition(disposition: string): string {
-  const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i);
-  const filenameRaw = filenameMatch?.[1] ?? filenameMatch?.[2] ?? "";
-  try {
-    return decodeURIComponent(filenameRaw);
-  } catch {
-    return filenameRaw;
-  }
-}
-
-function looksLikeCsvResponse(contentType: string | null): boolean {
-  const ct = (contentType ?? "").toLowerCase();
-  return ct.includes("text/csv") || ct.includes("application/vnd.ms-excel") || ct.includes("text/plain");
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -109,97 +94,178 @@ serve(async (req) => {
       });
     }
 
-    // Discover sheet tabs (name + gid) without hardcoding.
-    // IMPORTANT: gid values are often large random integers (not 0..N), so probing ranges will miss tabs.
-    // Strategy:
-    //  1) Fetch the sheet HTML and extract gids from multiple patterns (gid=123, "gid":123, and gid\u003d123).
-    //  2) For each gid, validate by fetching CSV export and infer tab name from Content-Disposition filename.
-    //  3) If we can't discover tabs, fall back to single-sheet mode (genre in 3rd column).
-
+    // Strategy: Use Google's public feeds API to get sheet metadata including all tab names and gids.
+    // This endpoint works for public sheets without authentication.
+    // URL: https://spreadsheets.google.com/feeds/worksheets/{sheetId}/public/basic?alt=json
+    
     const sheetTabs: { name: string; gid: string }[] = [];
-    const pushUnique = (name: string, gid: string) => {
-      const trimmed = name.trim();
-      if (!trimmed || !gid) return;
-      if (!sheetTabs.some((t) => t.gid === gid)) sheetTabs.push({ name: trimmed, gid });
-    };
-
-    const collectGidsFromHtml = (html: string): string[] => {
-      const gids: string[] = [];
-
-      // gid=123
-      for (const m of html.matchAll(/\bgid=(\d+)\b/g)) gids.push(m[1]);
-
-      // "gid":123
-      for (const m of html.matchAll(/"gid"\s*:\s*(\d+)/g)) gids.push(m[1]);
-
-      // gid\u003d123 (escaped equals)
-      for (const m of html.matchAll(/gid\\u003d(\d+)/g)) gids.push(m[1]);
-
-      return Array.from(new Set(gids));
-    };
-
-    // 1) HTML discovery
+    
     try {
-      const htmlUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?usp=sharing`;
-      const htmlRes = await fetch(htmlUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; VibeQueueSync/1.0)",
-          Accept: "text/html,application/xhtml+xml",
-        },
-      });
-
-      console.log(`Sheet HTML fetch status=${htmlRes.status} content-type=${htmlRes.headers.get("content-type")}`);
-
-      if (htmlRes.ok) {
-        const html = await htmlRes.text();
-        const gids = collectGidsFromHtml(html);
-
-        console.log(`Found ${gids.length} candidate gids in HTML`);
-
-        for (const gid of gids) {
-          const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
-          const res = await fetch(csvUrl);
-          if (!res.ok) continue;
-          if (!looksLikeCsvResponse(res.headers.get("content-type"))) continue;
-
-          const csvText = await res.text();
-          const lines = csvText.split("\n").filter((l) => l.trim());
-          if (lines.length < 2) continue;
-
-          const filename = extractFilenameFromContentDisposition(res.headers.get("content-disposition") ?? "");
-          const inferredName = filename.replace(/\.csv$/i, "").trim();
-          pushUnique(inferredName || `Sheet ${gid}`, gid);
+      // Try the newer Sheets v4-like public endpoint first (works for many public sheets)
+      // Format: https://docs.google.com/spreadsheets/d/{id}/gviz/tq?tqx=out:json&sheet={sheetName}
+      // But we need sheet names first, so let's try another approach:
+      
+      // Approach: Probe gid=0 first, then try to find other sheets by checking common patterns
+      // OR use the worksheets feed which returns all sheet names
+      
+      const feedUrl = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/basic?alt=json`;
+      console.log(`Fetching worksheets feed: ${feedUrl}`);
+      
+      const feedRes = await fetch(feedUrl);
+      console.log(`Worksheets feed status: ${feedRes.status}`);
+      
+      if (feedRes.ok) {
+        const feedData = await feedRes.json();
+        const entries = feedData?.feed?.entry || [];
+        
+        console.log(`Found ${entries.length} sheets in feed`);
+        
+        for (const entry of entries) {
+          const title = entry.title?.$t || "Unknown";
+          // The link contains the gid in the format: .../od6 or similar, but we need to extract from id
+          // The id format is: https://spreadsheets.google.com/feeds/worksheets/{sheetId}/public/basic/{worksheetId}
+          // We can use the worksheetId to construct a proper gid
+          const entryId = entry.id?.$t || "";
+          const worksheetIdMatch = entryId.match(/\/([^/]+)$/);
+          const worksheetId = worksheetIdMatch?.[1] || "";
+          
+          // The worksheetId in feeds API is like 'od6', 'od7', etc. or the actual gid
+          // We need to find the actual gid - it's often embedded in the link
+          const links = entry.link || [];
+          let gid = "0";
+          
+          for (const link of links) {
+            const href = link.href || "";
+            const gidMatch = href.match(/gid=(\d+)/);
+            if (gidMatch) {
+              gid = gidMatch[1];
+              break;
+            }
+          }
+          
+          // If no gid found in links, try to get it from the export URL
+          if (gid === "0" && worksheetId && worksheetId !== "od6") {
+            // Try fetching with the worksheet ID pattern
+            gid = worksheetId;
+          }
+          
+          console.log(`Sheet found: "${title}" worksheetId=${worksheetId}`);
+          sheetTabs.push({ name: title, gid: worksheetId });
+        }
+      } else {
+        // Fallback: Try the alternate approach - probe using gviz endpoint
+        console.log("Worksheets feed failed, trying alternate discovery method...");
+        
+        // First, get the default sheet to confirm access works
+        const testUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=0`;
+        const testRes = await fetch(testUrl);
+        
+        if (testRes.ok) {
+          console.log("Default sheet accessible, probing for more sheets...");
+          
+          // Try common gid values (0, and probe a range)
+          const gidsToTry = ["0"];
+          
+          // Also try to get sheet info from the HTML/JSON that Google sometimes returns
+          const htmlUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+          const htmlRes = await fetch(htmlUrl, {
+            headers: { "Accept": "text/html" }
+          });
+          
+          if (htmlRes.ok) {
+            const html = await htmlRes.text();
+            
+            // Look for patterns like: {"name":"SheetName","index":0,"id":123456789}
+            const sheetMatches = html.matchAll(/"name"\s*:\s*"([^"]+)"\s*,\s*"index"\s*:\s*\d+\s*,\s*"id"\s*:\s*(\d+)/g);
+            for (const match of sheetMatches) {
+              const name = match[1];
+              const gid = match[2];
+              if (!sheetTabs.some(t => t.gid === gid)) {
+                sheetTabs.push({ name, gid });
+                console.log(`Found sheet from HTML: "${name}" gid=${gid}`);
+              }
+            }
+            
+            // Also try: gid=123456 patterns
+            const gidMatches = html.matchAll(/gid[=:](\d+)/g);
+            for (const match of gidMatches) {
+              if (!gidsToTry.includes(match[1])) {
+                gidsToTry.push(match[1]);
+              }
+            }
+          }
+          
+          // If we still haven't found sheets, probe the gids we found
+          if (sheetTabs.length === 0) {
+            for (const gid of gidsToTry.slice(0, 20)) {
+              const probeUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`;
+              const probeRes = await fetch(probeUrl);
+              if (probeRes.ok) {
+                const contentDisposition = probeRes.headers.get("content-disposition") || "";
+                let sheetName = `Sheet ${gid}`;
+                const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+                if (filenameMatch) {
+                  sheetName = filenameMatch[1].replace(/\.csv$/i, "");
+                }
+                if (!sheetTabs.some(t => t.gid === gid)) {
+                  sheetTabs.push({ name: sheetName, gid });
+                  console.log(`Found sheet via probe: "${sheetName}" gid=${gid}`);
+                }
+              }
+            }
+          }
         }
       }
-
-      if (sheetTabs.length > 0) {
-        console.log(
-          `Discovered ${sheetTabs.length} sheets via HTML gids: ${sheetTabs.map((s) => `${s.name}(gid=${s.gid})`).join(", ")}`
-        );
-      }
     } catch (e) {
-      console.log("Failed to discover tabs via HTML:", e);
+      console.error("Error discovering sheets:", e);
     }
 
-    // If we have sheet tabs, import each tab using gid-based CSV export
+    // If we found sheets via the feed/discovery, fetch each one
     if (sheetTabs.length > 0) {
+      console.log(`Discovered ${sheetTabs.length} sheets: ${sheetTabs.map(s => s.name).join(", ")}`);
+      
       const allSongs: { title: string; artist: string; genre: string; is_available: boolean }[] = [];
       const seen = new Set<string>();
 
       for (const tab of sheetTabs) {
-        const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${tab.gid}`;
-        console.log(`Fetching sheet: ${tab.name} (gid=${tab.gid})`);
+        // Use gviz endpoint which is more reliable for public sheets
+        const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab.name)}`;
+        console.log(`Fetching sheet: "${tab.name}"`);
 
         const res = await fetch(csvUrl);
         if (!res.ok) {
-          console.log(`Failed to fetch sheet ${tab.name} (gid=${tab.gid}) status=${res.status}`);
+          // Try with gid instead
+          const gidUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${tab.gid}`;
+          const gidRes = await fetch(gidUrl);
+          if (!gidRes.ok) {
+            console.log(`Failed to fetch sheet "${tab.name}"`);
+            continue;
+          }
+          
+          const csvText = await gidRes.text();
+          const lines = csvText.split("\n").filter((line) => line.trim());
+          if (lines.length < 2) continue;
+
+          for (let i = 1; i < lines.length; i++) {
+            const cols = parseCSVRow(lines[i]);
+            if (!cols[0] || cols[0].trim() === "") continue;
+
+            const title = cols[0] || "Unknown";
+            const artist = cols[1] || "Unknown";
+            const key = `${title}|||${artist}`.toLowerCase();
+
+            if (!seen.has(key)) {
+              seen.add(key);
+              allSongs.push({ title, artist, genre: tab.name, is_available: true });
+            }
+          }
           continue;
         }
 
         const csvText = await res.text();
         const lines = csvText.split("\n").filter((line) => line.trim());
         if (lines.length < 2) {
-          console.log(`Sheet ${tab.name} has no data rows`);
+          console.log(`Sheet "${tab.name}" has no data rows`);
           continue;
         }
 
@@ -213,45 +279,44 @@ serve(async (req) => {
 
           if (!seen.has(key)) {
             seen.add(key);
-            allSongs.push({
-              title,
-              artist,
-              genre: tab.name,
-              is_available: true,
-            });
+            allSongs.push({ title, artist, genre: tab.name, is_available: true });
           }
         }
 
-        console.log(`Parsed ${lines.length - 1} rows from sheet ${tab.name}`);
+        console.log(`Parsed data from sheet "${tab.name}"`);
       }
 
-      console.log(`Total unique songs: ${allSongs.length}`);
+      if (allSongs.length > 0) {
+        console.log(`Total unique songs: ${allSongs.length}`);
 
-      await supabase.from("songs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-      for (let i = 0; i < allSongs.length; i += 50) {
-        const batch = allSongs.slice(i, i + 50);
-        const { error } = await supabase.from("songs").insert(batch);
-        if (error) console.error("Insert error:", error);
+        await supabase.from("songs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        for (let i = 0; i < allSongs.length; i += 50) {
+          const batch = allSongs.slice(i, i + 50);
+          const { error } = await supabase.from("songs").insert(batch);
+          if (error) console.error("Insert error:", error);
+        }
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            count: allSongs.length, 
+            sheets: sheetTabs.map((s) => s.name),
+            genres: sheetTabs.map((s) => s.name)
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-
-      return new Response(
-        JSON.stringify({ success: true, count: allSongs.length, sheets: sheetTabs.map((s) => s.name) }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     // Fallback: single-sheet mode where column 3 is genre
-    console.log(
-      "Multi-sheet discovery failed. Falling back to single sheet mode with genre in 3rd column (or blank if not provided)."
-    );
+    console.log("Multi-sheet discovery failed. Falling back to single sheet mode with genre in 3rd column.");
 
     const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
     const response = await fetch(csvUrl);
     if (!response.ok) {
       return new Response(
         JSON.stringify({
-          error:
-            "Failed to fetch Google Sheet. Make sure it is publicly accessible (Anyone with the link can view).",
+          error: "Failed to fetch Google Sheet. Make sure it is publicly accessible (Anyone with the link can view).",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
