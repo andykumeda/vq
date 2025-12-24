@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, RefreshCw, Music, ListMusic, Play, Clock } from 'lucide-react';
+import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useRequests, useUpdateRequestStatus } from '@/hooks/useRequests';
@@ -7,6 +7,7 @@ import { useSettings, useVerifyPin } from '@/hooks/useSettings';
 import { PinModal } from '@/components/dj/PinModal';
 import { RequestRow } from '@/components/dj/RequestRow';
 import { SettingsModal } from '@/components/dj/SettingsModal';
+import { ManualPlayModal } from '@/components/dj/ManualPlayModal';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -14,7 +15,9 @@ export default function DJConsole() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [djPin, setDjPin] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isManualPlayOpen, setIsManualPlayOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [manualNowPlaying, setManualNowPlaying] = useState<{ title: string; artist: string } | null>(null);
 
   const { data: requests, isLoading, refetch } = useRequests();
   const { data: settings } = useSettings();
@@ -73,6 +76,15 @@ export default function DJConsole() {
   const handlePinSuccess = (pin: string) => {
     setDjPin(pin);
     setIsAuthenticated(true);
+  };
+
+  const handleManualPlay = (song: { title: string; artist: string }) => {
+    setManualNowPlaying(song);
+    toast.success(`Now playing: ${song.title} by ${song.artist}`);
+  };
+
+  const handleClearManualPlay = () => {
+    setManualNowPlaying(null);
   };
 
   const nowPlaying = requests?.find((r) => r.status === 'playing');
@@ -156,20 +168,57 @@ export default function DJConsole() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
         {/* Now Playing */}
-        {nowPlaying && (
-          <section>
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
               <div className="w-3 h-3 bg-primary rounded-full animate-pulse" />
               Now Playing
             </h2>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsManualPlayOpen(true)}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Play Song
+            </Button>
+          </div>
+          
+          {nowPlaying ? (
             <RequestRow
               request={nowPlaying}
               onAccept={() => {}}
               onReject={() => {}}
               onMarkPlayed={() => handleMarkPlayed(nowPlaying.id, nowPlaying.status)}
             />
-          </section>
-        )}
+          ) : manualNowPlaying ? (
+            <Card className="glass-card p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <Music className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">{manualNowPlaying.title}</h3>
+                    <p className="text-sm text-muted-foreground">{manualNowPlaying.artist}</p>
+                    <span className="text-xs text-muted-foreground">Manual play</span>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={handleClearManualPlay}>
+                  Done
+                </Button>
+              </div>
+            </Card>
+          ) : (
+            <Card className="glass-card p-6 text-center">
+              <Music className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+              <p className="text-muted-foreground text-sm">Nothing playing</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Accept a request or use "Play Song" to set what's playing
+              </p>
+            </Card>
+          )}
+        </section>
 
         {/* Up Next */}
         {upNext.length > 0 && (
@@ -232,6 +281,12 @@ export default function DJConsole() {
         open={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         djPin={djPin}
+      />
+
+      <ManualPlayModal
+        open={isManualPlayOpen}
+        onClose={() => setIsManualPlayOpen(false)}
+        onPlay={handleManualPlay}
       />
     </div>
   );
