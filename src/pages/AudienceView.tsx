@@ -7,6 +7,7 @@ import { useSongs } from '@/hooks/useSongs';
 import { useGenres } from '@/hooks/useGenres';
 import { useRequests, useCreateRequest, useCreateCustomRequest, useCheckDuplicateRequest } from '@/hooks/useRequests';
 import { usePaymentHandles } from '@/hooks/useSettings';
+import { useRequestNotifications } from '@/hooks/useRequestNotifications';
 import { UsernameModal } from '@/components/audience/UsernameModal';
 import { SearchBar } from '@/components/audience/SearchBar';
 import { GenreFilter } from '@/components/audience/GenreFilter';
@@ -14,6 +15,8 @@ import { SongCard } from '@/components/audience/SongCard';
 import { RequestModal } from '@/components/audience/RequestModal';
 import { CustomRequestModal } from '@/components/audience/CustomRequestModal';
 import { QueueItem } from '@/components/audience/QueueItem';
+import { TippingModal } from '@/components/audience/TippingModal';
+import { RejectionModal } from '@/components/audience/RejectionModal';
 import { toast } from 'sonner';
 import type { Song } from '@/types/vibequeue';
 
@@ -46,6 +49,13 @@ export default function AudienceView() {
   const createRequest = useCreateRequest();
   const createCustomRequest = useCreateCustomRequest();
   const checkDuplicate = useCheckDuplicateRequest();
+  
+  const {
+    playingRequest,
+    rejectedRequest,
+    clearPlayingNotification,
+    clearRejectedNotification,
+  } = useRequestNotifications(username);
 
   const handleSongClick = async (song: Song) => {
     const isDuplicate = await checkDuplicate(song.id);
@@ -289,6 +299,21 @@ export default function AudienceView() {
           <ArrowUp className="h-5 w-5" />
         </Button>
       )}
+
+      {/* Tipping Modal - shows when user's song starts playing */}
+      <TippingModal
+        open={!!playingRequest}
+        onClose={clearPlayingNotification}
+        request={playingRequest}
+        paymentHandles={paymentHandles}
+      />
+
+      {/* Rejection Modal - shows when user's request is rejected */}
+      <RejectionModal
+        open={!!rejectedRequest}
+        onClose={clearRejectedNotification}
+        request={rejectedRequest}
+      />
     </div>
   );
 }
