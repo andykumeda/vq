@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Music, Lock, Loader2 } from 'lucide-react';
 
 interface PinModalProps {
@@ -54,20 +53,15 @@ export function PinModal({ open, onVerify, onSuccess }: PinModalProps) {
         </DialogHeader>
 
         <div className="flex flex-col items-center space-y-6 mt-4">
-          <InputOTP
+          <input
+            type="password"
             maxLength={4}
             value={pin}
-            onChange={handleComplete}
+            onChange={(e) => handleComplete(e.target.value)}
             disabled={isVerifying}
-            className={error ? 'animate-shake' : ''}
-          >
-            <InputOTPGroup>
-              <InputOTPSlot index={0} className={error ? 'border-destructive' : ''} />
-              <InputOTPSlot index={1} className={error ? 'border-destructive' : ''} />
-              <InputOTPSlot index={2} className={error ? 'border-destructive' : ''} />
-              <InputOTPSlot index={3} className={error ? 'border-destructive' : ''} />
-            </InputOTPGroup>
-          </InputOTP>
+            className={`w-32 h-12 text-center text-2xl tracking-widest border rounded bg-background ${error ? 'border-destructive' : 'border-input'}`}
+            autoFocus
+          />
 
           {isVerifying && (
             <div className="flex items-center gap-2 text-muted-foreground">

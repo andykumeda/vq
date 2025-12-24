@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Save } from 'lucide-react';
+import { Settings, Save, Loader2 } from 'lucide-react';
 import { useSettings, useUpdateSetting } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ interface SettingsModalProps {
 export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
   const { data: settings } = useSettings();
   const updateSetting = useUpdateSetting();
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     dj_pin: '',
@@ -26,7 +27,7 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
   });
 
   // Sync form data when settings load
-  useState(() => {
+  useEffect(() => {
     if (settings) {
       setFormData({
         dj_pin: settings.dj_pin || '',
@@ -36,18 +37,42 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
         event_name: settings.event_name || '',
       });
     }
-  });
+  }, [settings, open]);
 
   const handleSave = async () => {
+    if (!settings) return;
+    setIsSaving(true);
+    
     try {
-      const updates = Object.entries(formData).map(([key, value]) =>
-        updateSetting.mutateAsync({ key, value, pin: djPin })
+      // Find keys that actually changed
+      const changedEntries = Object.entries(formData).filter(([key, value]) => 
+        value !== (settings[key] || '')
       );
-      await Promise.all(updates);
+
+      if (changedEntries.length === 0) {
+        toast.info('No changes to save');
+        onClose();
+        return;
+      }
+
+      // Sort so dj_pin is updated last, to avoid invalidating the PIN for other updates in this batch
+      const sortedEntries = [...changedEntries].sort(([a], [b]) => {
+        if (a === 'dj_pin') return 1;
+        if (b === 'dj_pin') return -1;
+        return 0;
+      });
+
+      for (const [key, value] of sortedEntries) {
+        await updateSetting.mutateAsync({ key, value, pin: djPin });
+      }
+
       toast.success('Settings saved!');
       onClose();
-    } catch (error) {
-      toast.error('Failed to save settings');
+    } catch (error: any) {
+      console.error('Save settings error:', error);
+      toast.error(error.message || 'Failed to save settings');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -130,11 +155,15 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={updateSetting.isPending}
+              disabled={isSaving}
               className="flex-1"
             >
-              <Save className="w-4 h-4 mr-2" />
-              Save Settings
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              {isSaving ? 'Saving...' : 'Save Settings'}
             </Button>
           </div>
         </div>

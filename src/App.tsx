@@ -20,7 +20,6 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/audience" element={<AudienceView />} />
           <Route path="/dj" element={<DJConsole />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

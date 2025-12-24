@@ -27,15 +27,18 @@ export function TippingModal({ open, onClose, request, paymentHandles }: Tipping
 
   const openPaymentLink = (type: 'venmo' | 'paypal' | 'cashapp', handle: string) => {
     let url = '';
+    const cleanHandle = handle.replace('@', '').replace('$', '');
+    
     switch (type) {
       case 'venmo':
-        url = `https://venmo.com/${handle}`;
+        // Universal link that works on mobile and web
+        url = `https://venmo.com/${cleanHandle}`;
         break;
       case 'paypal':
-        url = `https://paypal.me/${handle}`;
+        url = `https://paypal.me/${cleanHandle}`;
         break;
       case 'cashapp':
-        url = `https://cash.app/$${handle.replace('$', '')}`;
+        url = `https://cash.app/$${cleanHandle}`;
         break;
     }
     window.open(url, '_blank');

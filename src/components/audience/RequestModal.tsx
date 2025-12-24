@@ -35,16 +35,18 @@ export function RequestModal({
     const handle = paymentHandles[type];
     if (!handle) return;
 
+    const cleanHandle = handle.replace('@', '').replace('$', '');
     let url = '';
+    
     switch (type) {
       case 'venmo':
-        url = `venmo://paycharge?txn=pay&recipients=${handle}`;
+        url = `https://venmo.com/${cleanHandle}`;
         break;
       case 'paypal':
-        url = `https://paypal.me/${handle}`;
+        url = `https://paypal.me/${cleanHandle}`;
         break;
       case 'cashapp':
-        url = `https://cash.app/$${handle.replace('$', '')}`;
+        url = `https://cash.app/$${cleanHandle}`;
         break;
     }
     window.open(url, '_blank');

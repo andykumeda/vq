@@ -6,7 +6,7 @@ import { useUsername } from '@/hooks/useUsername';
 import { useSongs } from '@/hooks/useSongs';
 import { useGenres } from '@/hooks/useGenres';
 import { useRequests, useCreateRequest, useCreateCustomRequest, useCheckDuplicateRequest } from '@/hooks/useRequests';
-import { usePaymentHandles } from '@/hooks/useSettings';
+import { usePaymentHandles, useSettings } from '@/hooks/useSettings';
 import { useRequestNotifications } from '@/hooks/useRequestNotifications';
 import { UsernameModal } from '@/components/audience/UsernameModal';
 import { SearchBar } from '@/components/audience/SearchBar';
@@ -45,6 +45,7 @@ export default function AudienceView() {
   const { data: genres = [] } = useGenres();
   const { data: songs, isLoading: songsLoading } = useSongs(searchQuery, selectedGenres);
   const { data: requests } = useRequests();
+  const { data: settings } = useSettings();
   const { handles: paymentHandles } = usePaymentHandles();
   const createRequest = useCreateRequest();
   const createCustomRequest = useCreateCustomRequest();
@@ -56,6 +57,8 @@ export default function AudienceView() {
     clearPlayingNotification,
     clearRejectedNotification,
   } = useRequestNotifications(username);
+
+  const eventName = settings?.event_name || 'VibeQueue';
 
   const handleSongClick = async (song: Song) => {
     const isDuplicate = await checkDuplicate(song.id);
@@ -120,7 +123,7 @@ export default function AudienceView() {
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/50">
         <div className="px-4 py-4">
           <div className="flex items-center justify-between mb-1">
-            <h1 className="text-2xl font-bold neon-text-purple">VibeQueue</h1>
+            <h1 className="text-2xl font-bold neon-text-purple">{eventName}</h1>
             {username && (
               <span className="text-sm text-muted-foreground">
                 Hey, <span className="text-primary">{username}</span>
