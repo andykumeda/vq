@@ -30,7 +30,7 @@ VibeQueue is a live song request and tipping platform designed for nightclubs, D
 
 1.  **Clone the repository:**
     ```bash
-    git clone <your-repo-url>
+    git clone https://github.com/andykumeda/vq
     cd vq
     ```
 
