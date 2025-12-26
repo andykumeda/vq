@@ -53,6 +53,8 @@ VibeQueue allows audiences to browse a song library and request songs for the DJ
 - `POST /api/verify-pin` - Verify DJ PIN
 - `POST /api/update-settings` - Update settings (requires PIN)
 - `POST /api/sync-google-sheets` - Sync song library from Google Sheets
+- `POST /api/recognize-song` - Recognize song from audio using AudD API
+- `POST /api/get-lyrics` - Get lyrics for a song using AudD API
 
 ## Environment Variables
 
@@ -84,3 +86,4 @@ The backend serves both the API and the static frontend assets in production.
 - Switched from npm to bun for better performance
 - Configured deployment to run TypeScript server directly with bun
 - Fixed manual play feature: DJ can now manually set a song as "now playing" and it persists to the database, so the audience can see it in real-time
+- Fixed song recognition feature: Increased server body limit to 10MB for audio uploads, fixed API endpoint routing and audio format handling (webm/opus → ogg)
