@@ -250,21 +250,25 @@ export async function registerRoutes(app: Express): Promise<void> {
         return res.status(400).json({ error: "Audio data is required" });
       }
       
+      console.log("Sending audio to AudD, data length:", audioData.length);
+      
       const response = await fetch("https://api.audd.io/", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
           api_token: apiToken,
           audio: audioData,
+          audio_format: "webm",
           return: "lyrics,spotify"
         })
       });
       
+      const result = await response.json();
+      console.log("AudD response:", JSON.stringify(result, null, 2));
+      
       if (!response.ok) {
         throw new Error(`AudD API error: ${response.status}`);
       }
-      
-      const result = await response.json();
       
       if (result.status === "error") {
         return res.status(400).json({ error: result.error?.error_message || "Recognition failed" });

@@ -95,7 +95,7 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
           reader.onload = async () => {
             const base64Audio = (reader.result as string).split(',')[1];
             
-            const response = await fetch('/api/recognize', {
+            const response = await fetch('/api/recognize-song', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ audioData: base64Audio })
@@ -108,10 +108,10 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
               return;
             }
             
-            if (result.found) {
-              setTitle(result.title);
-              setArtist(result.artist);
-              toast.success(`Found: ${result.title} by ${result.artist}`);
+            if (result.found && result.song) {
+              setTitle(result.song.title);
+              setArtist(result.song.artist);
+              toast.success(`Found: ${result.song.title} by ${result.song.artist}`);
             } else {
               toast.info(result.message || 'No song recognized. Please enter manually.');
             }
