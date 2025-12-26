@@ -69,11 +69,17 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      let mimeType = 'audio/webm';
+      let mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/mp4';
+        mimeType = 'audio/webm';
         if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = '';
+          mimeType = 'audio/ogg;codecs=opus';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = 'audio/mp4';
+            if (!MediaRecorder.isTypeSupported(mimeType)) {
+              mimeType = '';
+            }
+          }
         }
       }
       
@@ -120,8 +126,11 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
               return;
             }
             
-            const audioFormat = actualMimeType.includes('mp4') ? 'mp4' : 
-                               actualMimeType.includes('ogg') ? 'ogg' : 'webm';
+            let audioFormat = 'ogg';
+            if (actualMimeType.includes('mp4')) audioFormat = 'mp4';
+            else if (actualMimeType.includes('ogg')) audioFormat = 'ogg';
+            else if (actualMimeType.includes('webm')) audioFormat = 'ogg';
+            else if (actualMimeType.includes('wav')) audioFormat = 'wav';
             
             console.log('Sending to API with format:', audioFormat);
             
