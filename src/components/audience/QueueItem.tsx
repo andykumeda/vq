@@ -2,6 +2,7 @@ import { Music, Clock, Play, Sparkles, DollarSign, Languages, Loader2, X } from 
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import type { Request } from '@/types/vibequeue';
@@ -140,7 +141,7 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-2 right-2 text-muted-foreground hover:text-white"
+            className="absolute top-2 right-2 z-10 text-muted-foreground hover:text-white"
             onClick={() => setShowLyrics(false)}
             data-testid="button-close-lyrics"
           >
@@ -148,9 +149,11 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
           </Button>
           <div className="prose prose-invert max-w-none">
             <h5 className="text-xs uppercase tracking-[0.2em] text-primary mb-4">Lyrics</h5>
-            <div className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground italic">
-              {lyrics}
-            </div>
+            <ScrollArea className="max-h-[60vh]">
+              <div className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground italic pr-4">
+                {lyrics}
+              </div>
+            </ScrollArea>
             <p className="text-[10px] mt-6 text-muted-foreground/50 text-center uppercase tracking-widest">
               Lyrics powered by AudD
             </p>
