@@ -219,6 +219,17 @@ export default function AudienceView() {
                       onClick={() => handleSongClick(song)}
                     />
                   ))}
+                  <div className="pt-2 border-t border-border/50">
+                    <Button
+                      onClick={() => setIsCustomRequestModalOpen(true)}
+                      variant="ghost"
+                      className="w-full justify-start text-muted-foreground hover:text-foreground"
+                      data-testid="button-custom-request-inline"
+                    >
+                      <PlusCircle className="w-4 h-4 mr-2" />
+                      Can't find your song? Request something else
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>

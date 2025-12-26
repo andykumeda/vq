@@ -28,10 +28,11 @@ export function RequestRow({ request, onAccept, onReject, onMarkPlayed, onUpdate
   const songTitle = request.song?.title || 'Unknown';
   const songArtist = request.song?.artist || 'Unknown Artist';
   const needsEdit = songTitle.includes('Unknown') || songArtist.includes('Unknown');
+  const canEdit = request.status === 'pending' || request.status === 'next_up';
 
   const handleStartEdit = () => {
-    setEditTitle(songTitle === 'Unknown Title' ? '' : songTitle);
-    setEditArtist(songArtist === 'Unknown Artist' ? '' : songArtist);
+    setEditTitle(songTitle.includes('Unknown') ? '' : songTitle);
+    setEditArtist(songArtist.includes('Unknown') ? '' : songArtist);
     setIsEditing(true);
   };
 
@@ -101,12 +102,12 @@ export function RequestRow({ request, onAccept, onReject, onMarkPlayed, onUpdate
                     Tipped
                   </Badge>
                 )}
-                {needsEdit && onUpdateSong && (
+                {canEdit && onUpdateSong && (
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={handleStartEdit}
-                    className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                    className={`h-6 px-2 ${needsEdit ? 'text-warning hover:text-warning' : 'text-muted-foreground hover:text-foreground'}`}
                     data-testid="button-edit-song"
                   >
                     <Pencil className="w-3 h-3 mr-1" />
