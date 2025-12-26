@@ -103,16 +103,27 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
         const audioBlob = new Blob(chunks, { type: actualMimeType });
         console.log('Audio blob size:', audioBlob.size, 'type:', actualMimeType);
         
-        try {
-          toast.info('Identifying song...');
-          
-          const reader = new FileReader();
-          reader.onload = async () => {
+        toast.info('Identifying song...');
+        
+        const reader = new FileReader();
+        reader.onerror = () => {
+          console.error('FileReader error:', reader.error);
+          toast.error('Failed to read audio data');
+        };
+        reader.onload = async () => {
+          try {
             const base64Audio = (reader.result as string).split(',')[1];
             console.log('Base64 audio length:', base64Audio?.length);
             
+            if (!base64Audio || base64Audio.length < 100) {
+              toast.error('Audio data too small - try recording longer');
+              return;
+            }
+            
             const audioFormat = actualMimeType.includes('mp4') ? 'mp4' : 
                                actualMimeType.includes('ogg') ? 'ogg' : 'webm';
+            
+            console.log('Sending to API with format:', audioFormat);
             
             const response = await fetch('/api/recognize-song', {
               method: 'POST',
@@ -121,6 +132,7 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
             });
             
             const result = await response.json();
+            console.log('API response:', result);
             
             if (!response.ok) {
               toast.error(result.error || 'Recognition failed');
@@ -134,12 +146,12 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
             } else {
               toast.info(result.message || 'No song recognized. Please enter manually.');
             }
-          };
-          reader.readAsDataURL(audioBlob);
-        } catch (err) {
-          console.error('Recognition error:', err);
-          toast.error('Failed to recognize song');
-        }
+          } catch (err) {
+            console.error('Recognition error:', err);
+            toast.error('Failed to recognize song: ' + (err instanceof Error ? err.message : 'Unknown error'));
+          }
+        };
+        reader.readAsDataURL(audioBlob);
       };
 
       setMediaRecorder(recorder);
