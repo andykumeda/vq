@@ -19,6 +19,8 @@ export interface IStorage {
   
   getGenres(): Promise<string[]>;
   syncSongsFromSheet(songsData: InsertSong[]): Promise<number>;
+  
+  initializeDefaultSettings(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -179,6 +181,25 @@ export class DatabaseStorage implements IStorage {
     }
     
     return songsData.length;
+  }
+
+  async initializeDefaultSettings(): Promise<void> {
+    const defaults = [
+      { key: 'dj_pin', value: '1234' },
+      { key: 'event_name', value: 'VibeQueue' },
+      { key: 'venmo_handle', value: '' },
+      { key: 'paypal_handle', value: '' },
+      { key: 'cashapp_handle', value: '' },
+      { key: 'google_sheet_url', value: '' },
+    ];
+
+    for (const { key, value } of defaults) {
+      const existing = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
+      if (existing.length === 0) {
+        await db.insert(settings).values({ key, value });
+        console.log(`Initialized default setting: ${key}`);
+      }
+    }
   }
 }
 
