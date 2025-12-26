@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useRequests, useUpdateRequestStatus } from '@/hooks/useRequests';
+import { useRequests, useUpdateRequestStatus, useCreateManualPlay } from '@/hooks/useRequests';
 import { useSettings, useVerifyPin, useSyncGoogleSheets } from '@/hooks/useSettings';
 import { PinModal } from '@/components/dj/PinModal';
 import { RequestRow } from '@/components/dj/RequestRow';
@@ -15,13 +15,13 @@ export default function DJConsole() {
   const [djPin, setDjPin] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isManualPlayOpen, setIsManualPlayOpen] = useState(false);
-  const [manualNowPlaying, setManualNowPlaying] = useState<{ title: string; artist: string } | null>(null);
 
   const { data: requests, isLoading, refetch } = useRequests();
   const { data: settings } = useSettings();
   const updateStatus = useUpdateRequestStatus();
   const verifyPin = useVerifyPin();
   const syncLibrary = useSyncGoogleSheets();
+  const createManualPlay = useCreateManualPlay();
 
   const handleAccept = async (requestId: string) => {
     try {
@@ -70,13 +70,13 @@ export default function DJConsole() {
     setIsAuthenticated(true);
   };
 
-  const handleManualPlay = (song: { title: string; artist: string }) => {
-    setManualNowPlaying(song);
-    toast.success(`Now playing: ${song.title} by ${song.artist}`);
-  };
-
-  const handleClearManualPlay = () => {
-    setManualNowPlaying(null);
+  const handleManualPlay = async (song: { title: string; artist: string }) => {
+    try {
+      await createManualPlay.mutateAsync(song);
+      toast.success(`Now playing: ${song.title} by ${song.artist}`);
+    } catch (error) {
+      toast.error('Failed to set now playing');
+    }
   };
 
   const nowPlaying = requests?.find((r: any) => r.status === 'playing');
@@ -181,24 +181,6 @@ export default function DJConsole() {
               onReject={() => {}}
               onMarkPlayed={() => handleMarkPlayed(nowPlaying.id, nowPlaying.status)}
             />
-          ) : manualNowPlaying ? (
-            <Card className="glass-card p-4">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
-                    <Music className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{manualNowPlaying.title}</h3>
-                    <p className="text-sm text-muted-foreground">{manualNowPlaying.artist}</p>
-                    <span className="text-xs text-muted-foreground">Manual play</span>
-                  </div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleClearManualPlay}>
-                  Done
-                </Button>
-              </div>
-            </Card>
           ) : (
             <Card className="glass-card p-6 text-center">
               <Music className="w-10 h-10 mx-auto text-muted-foreground mb-2" />

@@ -139,3 +139,35 @@ export function useCheckDuplicateRequest() {
     return data.isDuplicate;
   };
 }
+
+export function useCreateManualPlay() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      title,
+      artist,
+    }: {
+      title: string;
+      artist: string;
+    }) => {
+      const songRes = await apiRequest('POST', '/api/songs', {
+        title,
+        artist,
+        isAvailable: false,
+      });
+      const song = await songRes.json();
+
+      const res = await apiRequest('POST', '/api/requests', {
+        songId: song.id,
+        requesterUsername: 'DJ',
+        isTipped: false,
+        status: 'playing',
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
+    },
+  });
+}

@@ -83,3 +83,4 @@ The backend serves both the API and the static frontend assets in production.
 - Removed Supabase client dependency, using direct API calls
 - Switched from npm to bun for better performance
 - Configured deployment to run TypeScript server directly with bun
+- Fixed manual play feature: DJ can now manually set a song as "now playing" and it persists to the database, so the audience can see it in real-time
