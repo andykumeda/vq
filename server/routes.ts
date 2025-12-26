@@ -218,6 +218,115 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  app.post("/api/recognize-song", async (req, res) => {
+    try {
+      const { audioData } = req.body;
+      
+      const apiToken = process.env.AUDD_API_TOKEN;
+      if (!apiToken) {
+        return res.status(503).json({ 
+          error: "Song recognition is not configured. Add AUDD_API_TOKEN to enable this feature."
+        });
+      }
+      
+      if (!audioData) {
+        return res.status(400).json({ error: "Audio data is required" });
+      }
+      
+      const response = await fetch("https://api.audd.io/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          api_token: apiToken,
+          audio: audioData,
+          return: "lyrics,spotify"
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`AudD API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.status === "error") {
+        return res.status(400).json({ error: result.error?.error_message || "Recognition failed" });
+      }
+      
+      if (!result.result) {
+        return res.json({ found: false, message: "No song recognized" });
+      }
+      
+      res.json({
+        found: true,
+        song: {
+          title: result.result.title,
+          artist: result.result.artist,
+          album: result.result.album,
+          releaseDate: result.result.release_date,
+          lyrics: result.result.lyrics?.lyrics,
+          spotify: result.result.spotify
+        }
+      });
+    } catch (error) {
+      console.error("Song recognition error:", error);
+      res.status(500).json({ error: "Failed to recognize song" });
+    }
+  });
+
+  app.post("/api/get-lyrics", async (req, res) => {
+    try {
+      const { title, artist } = req.body;
+      
+      const apiToken = process.env.AUDD_API_TOKEN;
+      if (!apiToken) {
+        return res.status(503).json({
+          error: "Lyrics lookup is not configured. Add AUDD_API_TOKEN to enable this feature."
+        });
+      }
+      
+      if (!title || !artist) {
+        return res.status(400).json({ error: "Title and artist are required" });
+      }
+      
+      const response = await fetch("https://api.audd.io/findLyrics/", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          api_token: apiToken,
+          q: `${artist} ${title}`
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`AudD API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (result.status === "error") {
+        return res.status(400).json({ error: result.error?.error_message || "Lyrics lookup failed" });
+      }
+      
+      if (!result.result || result.result.length === 0) {
+        return res.json({ found: false, message: "No lyrics found" });
+      }
+      
+      const match = result.result[0];
+      res.json({
+        found: true,
+        lyrics: {
+          title: match.title,
+          artist: match.artist,
+          lyrics: match.lyrics
+        }
+      });
+    } catch (error) {
+      console.error("Lyrics lookup error:", error);
+      res.status(500).json({ error: "Failed to get lyrics" });
+    }
+  });
+
   app.post("/api/sync-google-sheets", async (req, res) => {
     try {
       const { pin } = req.body;
