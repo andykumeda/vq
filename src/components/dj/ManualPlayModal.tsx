@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Mic, Music, Loader2, Search } from 'lucide-react';
+import { Mic, Music, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -22,18 +22,18 @@ interface ManualPlayModalProps {
 export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps) {
   const [title, setTitle] = useState('');
   const [artist, setArtist] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeField, setActiveField] = useState<'title' | 'artist' | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
+  const searchQuery = activeField === 'title' ? title : activeField === 'artist' ? artist : '';
   const { data: songs = [] } = useSongs(searchQuery);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
+        setActiveField(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -44,21 +44,14 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
     if (!open) {
       setTitle('');
       setArtist('');
-      setSearchQuery('');
-      setShowSuggestions(false);
+      setActiveField(null);
     }
   }, [open]);
-
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    setShowSuggestions(value.length > 0);
-  };
 
   const handleSelectSong = (song: Song) => {
     setTitle(song.title);
     setArtist(song.artist);
-    setSearchQuery('');
-    setShowSuggestions(false);
+    setActiveField(null);
   };
 
   const handleManualPlay = () => {
@@ -69,7 +62,6 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
     onPlay({ title: title.trim(), artist: artist.trim() });
     setTitle('');
     setArtist('');
-    setSearchQuery('');
     onClose();
   };
 
@@ -115,6 +107,8 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
     }
   };
 
+  const showSuggestions = activeField !== null && searchQuery.length > 0 && songs.length > 0;
+
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
@@ -156,75 +150,65 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
             </div>
             <div className="relative flex justify-center text-xs uppercase">
               <span className="bg-background px-2 text-muted-foreground">
-                or search library
-              </span>
-            </div>
-          </div>
-
-          <div className="relative" ref={suggestionsRef}>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search songs in library..."
-                className="pl-9"
-                data-testid="input-search-library"
-              />
-            </div>
-            {showSuggestions && songs.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-popover border border-border rounded-md shadow-lg">
-                {songs.slice(0, 8).map((song) => (
-                  <button
-                    key={song.id}
-                    onClick={() => handleSelectSong(song)}
-                    className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex flex-col"
-                    data-testid={`suggestion-${song.id}`}
-                  >
-                    <span className="font-medium text-sm truncate">{song.title}</span>
-                    <span className="text-xs text-muted-foreground truncate">{song.artist}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {showSuggestions && searchQuery.length > 0 && songs.length === 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg p-3 text-sm text-muted-foreground">
-                No songs found. Enter details manually below.
-              </div>
-            )}
-          </div>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">
                 or enter manually
               </span>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div>
+          <div className="space-y-3" ref={suggestionsRef}>
+            <div className="relative">
               <Label htmlFor="title">Song Title</Label>
               <Input
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter song title"
+                onFocus={() => setActiveField('title')}
+                placeholder="Start typing to search..."
+                autoComplete="off"
                 data-testid="input-song-title"
               />
+              {showSuggestions && activeField === 'title' && (
+                <div className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-popover border border-border rounded-md shadow-lg">
+                  {songs.slice(0, 6).map((song) => (
+                    <button
+                      key={song.id}
+                      onClick={() => handleSelectSong(song)}
+                      className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex flex-col"
+                      data-testid={`suggestion-title-${song.id}`}
+                    >
+                      <span className="font-medium text-sm truncate">{song.title}</span>
+                      <span className="text-xs text-muted-foreground truncate">{song.artist}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
+            <div className="relative">
               <Label htmlFor="artist">Artist</Label>
               <Input
                 id="artist"
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
-                placeholder="Enter artist name"
+                onFocus={() => setActiveField('artist')}
+                placeholder="Start typing to search..."
+                autoComplete="off"
                 data-testid="input-artist"
               />
+              {showSuggestions && activeField === 'artist' && (
+                <div className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-popover border border-border rounded-md shadow-lg">
+                  {songs.slice(0, 6).map((song) => (
+                    <button
+                      key={song.id}
+                      onClick={() => handleSelectSong(song)}
+                      className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex flex-col"
+                      data-testid={`suggestion-artist-${song.id}`}
+                    >
+                      <span className="font-medium text-sm truncate">{song.title}</span>
+                      <span className="text-xs text-muted-foreground truncate">{song.artist}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
