@@ -271,7 +271,12 @@ export async function registerRoutes(app: Express): Promise<void> {
       }
       
       if (result.status === "error") {
-        return res.status(400).json({ error: result.error?.error_message || "Recognition failed" });
+        const errorMsg = result.error?.error_message || "Recognition failed";
+        console.log("AudD error:", errorMsg);
+        return res.status(400).json({ 
+          error: `Recognition failed: ${errorMsg}`,
+          errorCode: result.error?.error_code
+        });
       }
       
       if (!result.result) {
