@@ -24,17 +24,21 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
 
     setIsLoadingLyrics(true);
     try {
-      const clientToken = import.meta.env.VITE_AUDD_API_TOKEN;
-      if (clientToken) {
-        const url = `https://api.audd.io/findLyrics/?api_token=${clientToken}&q=${encodeURIComponent(request.song?.artist + ' ' + request.song?.title)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        
-        if (data.result && data.result.length > 0) {
-          setLyrics(data.result[0].lyrics);
-          setShowLyrics(true);
-          return;
-        }
+      const res = await fetch('/api/get-lyrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: request.song?.title,
+          artist: request.song?.artist,
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.found && data.lyrics?.lyrics) {
+        setLyrics(data.lyrics.lyrics);
+        setShowLyrics(true);
+        return;
       }
 
       toast.info('Lyrics not found');

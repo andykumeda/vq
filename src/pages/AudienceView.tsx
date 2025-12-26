@@ -144,7 +144,7 @@ export default function AudienceView() {
               </h3>
               <QueueItem
                 request={nowPlaying}
-                isOwn={nowPlaying.requester_username === username}
+                isOwn={nowPlaying.requesterUsername === username}
               />
             </div>
           </section>
@@ -236,7 +236,7 @@ export default function AudienceView() {
                       <QueueItem
                         key={request.id}
                         request={request}
-                        isOwn={request.requester_username === username}
+                        isOwn={request.requesterUsername === username}
                       />
                     ))}
                   </div>
@@ -253,7 +253,7 @@ export default function AudienceView() {
                       <QueueItem
                         key={request.id}
                         request={request}
-                        isOwn={request.requester_username === username}
+                        isOwn={request.requesterUsername === username}
                       />
                     ))}
                   </div>
