@@ -68,9 +68,18 @@ Optional:
 - Dark theme by default
 - Uses bun for running/building (not npm)
 
+## Deployment
+
+The app is configured for autoscale deployment:
+- **Build**: `npm run build` (creates frontend assets in `dist/public`)
+- **Run**: `bun server/index.ts` (runs TypeScript server directly with bun)
+
+The backend serves both the API and the static frontend assets in production.
+
 ## Recent Changes
 
 - December 2024: Migrated from Supabase to Replit's built-in PostgreSQL database
 - Converted Supabase Edge Functions to Express API routes
 - Removed Supabase client dependency, using direct API calls
 - Switched from npm to bun for better performance
+- Configured deployment to run TypeScript server directly with bun

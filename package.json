@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "NODE_ENV=development bun run server/index.ts",
     "build": "vite build",
-    "start": "NODE_ENV=production bun run dist/index.js",
+    "start": "NODE_ENV=production bun server/index.ts",
     "lint": "eslint .",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
