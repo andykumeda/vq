@@ -24,6 +24,7 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
     paypal_handle: '',
     cashapp_handle: '',
     event_name: '',
+    google_sheet_url: '',
   });
 
   // Sync form data when settings load
@@ -35,6 +36,7 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
         paypal_handle: settings.paypal_handle || '',
         cashapp_handle: settings.cashapp_handle || '',
         event_name: settings.event_name || '',
+        google_sheet_url: settings.google_sheet_url || '',
       });
     }
   }, [settings, open]);
@@ -110,6 +112,21 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
                 maxLength={4}
                 className="mt-1"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="google_sheet_url">Google Sheets URL</Label>
+              <Input
+                id="google_sheet_url"
+                value={formData.google_sheet_url || settings?.google_sheet_url || ''}
+                onChange={(e) => setFormData({ ...formData, google_sheet_url: e.target.value })}
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="mt-1"
+                data-testid="input-google-sheet-url"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Paste your public Google Sheets URL here, then use "Sync Library" to import songs
+              </p>
             </div>
           </div>
 
