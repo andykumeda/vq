@@ -171,3 +171,25 @@ export function useCreateManualPlay() {
     },
   });
 }
+
+export function useUpdateSong() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      songId,
+      title,
+      artist,
+    }: {
+      songId: string;
+      title: string;
+      artist: string;
+    }) => {
+      const res = await apiRequest('PATCH', `/api/songs/${songId}`, { title, artist });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
+    },
+  });
+}

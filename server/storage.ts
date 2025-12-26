@@ -6,6 +6,7 @@ export interface IStorage {
   getSongs(searchQuery?: string, genreFilters?: string[]): Promise<Song[]>;
   getSongById(id: string): Promise<Song | null>;
   createSong(data: InsertSong): Promise<Song>;
+  updateSong(id: string, data: { title?: string; artist?: string }): Promise<Song | null>;
   
   getRequests(statusFilters?: RequestStatus[]): Promise<RequestWithSong[]>;
   getRequestById(id: string): Promise<RequestWithSong | null>;
@@ -58,6 +59,19 @@ export class DatabaseStorage implements IStorage {
   async createSong(data: InsertSong): Promise<Song> {
     const result = await db.insert(songs).values(data).returning();
     return result[0];
+  }
+
+  async updateSong(id: string, data: { title?: string; artist?: string }): Promise<Song | null> {
+    const updateData: { title?: string; artist?: string; updatedAt: Date } = { updatedAt: new Date() };
+    if (data.title) updateData.title = data.title;
+    if (data.artist) updateData.artist = data.artist;
+    
+    const result = await db
+      .update(songs)
+      .set(updateData)
+      .where(eq(songs.id, id))
+      .returning();
+    return result[0] || null;
   }
 
   async getRequests(statusFilters: RequestStatus[] = ["pending", "next_up", "playing"]): Promise<RequestWithSong[]> {

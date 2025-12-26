@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useRequests, useUpdateRequestStatus, useCreateManualPlay } from '@/hooks/useRequests';
+import { useRequests, useUpdateRequestStatus, useCreateManualPlay, useUpdateSong } from '@/hooks/useRequests';
 import { useSettings, useVerifyPin, useSyncGoogleSheets } from '@/hooks/useSettings';
 import { PinModal } from '@/components/dj/PinModal';
 import { RequestRow } from '@/components/dj/RequestRow';
@@ -22,6 +22,16 @@ export default function DJConsole() {
   const verifyPin = useVerifyPin();
   const syncLibrary = useSyncGoogleSheets();
   const createManualPlay = useCreateManualPlay();
+  const updateSong = useUpdateSong();
+
+  const handleUpdateSong = async (songId: string, title: string, artist: string) => {
+    try {
+      await updateSong.mutateAsync({ songId, title, artist });
+      toast.success('Song details updated');
+    } catch (error) {
+      toast.error('Failed to update song details');
+    }
+  };
 
   const handleAccept = async (requestId: string) => {
     try {
@@ -180,6 +190,7 @@ export default function DJConsole() {
               onAccept={() => {}}
               onReject={() => {}}
               onMarkPlayed={() => handleMarkPlayed(nowPlaying.id, nowPlaying.status)}
+              onUpdateSong={handleUpdateSong}
             />
           ) : (
             <Card className="glass-card p-6 text-center">
@@ -206,6 +217,7 @@ export default function DJConsole() {
                   onAccept={() => {}}
                   onReject={() => {}}
                   onMarkPlayed={() => handleMarkPlayed(request.id, request.status)}
+                  onUpdateSong={handleUpdateSong}
                 />
               ))}
             </div>
@@ -240,6 +252,7 @@ export default function DJConsole() {
                   onAccept={() => handleAccept(request.id)}
                   onReject={() => handleReject(request.id)}
                   onMarkPlayed={() => handleMarkPlayed(request.id, request.status)}
+                  onUpdateSong={handleUpdateSong}
                 />
               ))}
             </div>

@@ -27,8 +27,12 @@ export function CustomRequestModal({
   const [wantToTip, setWantToTip] = useState(false);
 
   const handleSubmit = () => {
-    if (!title.trim() || !artist.trim()) return;
-    onSubmit(title.trim(), artist.trim(), wantToTip);
+    if (!title.trim() && !artist.trim()) return;
+    onSubmit(
+      title.trim() || 'Unknown Title',
+      artist.trim() || 'Unknown Artist',
+      wantToTip
+    );
     setTitle('');
     setArtist('');
     setWantToTip(false);
@@ -62,7 +66,7 @@ export function CustomRequestModal({
     window.open(url, '_blank');
   };
 
-  const isValid = title.trim().length > 0 && artist.trim().length > 0;
+  const isValid = title.trim().length > 0 || artist.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>

@@ -81,6 +81,23 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  app.patch("/api/songs/:id", async (req, res) => {
+    try {
+      const { title, artist } = req.body;
+      if (!title && !artist) {
+        return res.status(400).json({ error: "Title or artist is required" });
+      }
+      const song = await storage.updateSong(req.params.id, { title, artist });
+      if (!song) {
+        return res.status(404).json({ error: "Song not found" });
+      }
+      res.json(song);
+    } catch (error) {
+      console.error("Error updating song:", error);
+      res.status(500).json({ error: "Failed to update song" });
+    }
+  });
+
   app.get("/api/genres", async (req, res) => {
     try {
       const genres = await storage.getGenres();
