@@ -79,8 +79,48 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
 
       recorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop());
-        toast.info('Song recognition requires an API key. Please enter the song details manually.');
         setIsListening(false);
+
+        if (chunks.length === 0) {
+          toast.error('No audio captured');
+          return;
+        }
+
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        
+        try {
+          toast.info('Identifying song...');
+          
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64Audio = (reader.result as string).split(',')[1];
+            
+            const response = await fetch('/api/recognize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ audioData: base64Audio })
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+              toast.error(result.error || 'Recognition failed');
+              return;
+            }
+            
+            if (result.found) {
+              setTitle(result.title);
+              setArtist(result.artist);
+              toast.success(`Found: ${result.title} by ${result.artist}`);
+            } else {
+              toast.info(result.message || 'No song recognized. Please enter manually.');
+            }
+          };
+          reader.readAsDataURL(audioBlob);
+        } catch (err) {
+          console.error('Recognition error:', err);
+          toast.error('Failed to recognize song');
+        }
       };
 
       setMediaRecorder(recorder);
