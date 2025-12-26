@@ -68,7 +68,20 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
   const startListening = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/mp4';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = '';
+        }
+      }
+      
+      const recorder = mimeType 
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      
+      console.log('Recording with mimeType:', recorder.mimeType);
       const chunks: Blob[] = [];
 
       recorder.ondataavailable = (e) => {
@@ -86,7 +99,9 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
           return;
         }
 
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const actualMimeType = recorder.mimeType || 'audio/webm';
+        const audioBlob = new Blob(chunks, { type: actualMimeType });
+        console.log('Audio blob size:', audioBlob.size, 'type:', actualMimeType);
         
         try {
           toast.info('Identifying song...');
@@ -94,11 +109,15 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
           const reader = new FileReader();
           reader.onload = async () => {
             const base64Audio = (reader.result as string).split(',')[1];
+            console.log('Base64 audio length:', base64Audio?.length);
+            
+            const audioFormat = actualMimeType.includes('mp4') ? 'mp4' : 
+                               actualMimeType.includes('ogg') ? 'ogg' : 'webm';
             
             const response = await fetch('/api/recognize-song', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ audioData: base64Audio })
+              body: JSON.stringify({ audioData: base64Audio, audioFormat })
             });
             
             const result = await response.json();
