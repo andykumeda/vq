@@ -1,79 +1,86 @@
-# VibeQueue 🎵
+# VibeQueue
 
 VibeQueue is a live song request and tipping platform designed for nightclubs, DJs, and event performers. It creates a seamless interaction between the audience and the DJ, featuring real-time queue management, integrated tipping, and live song lyrics.
 
-## ✨ Features
+## Features
 
--   **Audience Experience:**
-    -   Browse the DJ's full song library.
-    -   Request songs with optional priority tipping.
-    -   Real-time queue status (Pending, Next Up, Now Playing).
-    -   **Live Lyrics:** View lyrics for the currently playing song (powered by AudD).
-    -   **Automatic Notifications:** Instant popups on the user's phone when their song starts playing.
--   **DJ Console:**
-    -   Manage the request queue (Accept, Reject, Mark as Played).
-    -   **Library Sync:** Automatically sync song lists from Google Sheets.
-    -   **Tipping Integration:** Support for Venmo, PayPal, and Cash App handles.
-    -   **Dynamic Event Names:** Customize the event title (e.g., "Brandon's Birthday Party").
--   **Visuals:**
-    -   Premium nightclub dark theme with neon purple accents.
-    -   Responsive design for mobile and desktop.
+### Audience Experience
+- Browse the DJ's full song library with search and genre filters
+- Request songs with optional priority tipping
+- Real-time queue status (Pending, Next Up, Now Playing)
+- Live lyrics display for the currently playing song (powered by AudD)
+- Automatic notifications when your song starts playing
 
-## 🚀 Tech Stack
+### DJ Console
+- Manage the request queue (Accept, Reject, Mark as Played)
+- Song recognition via microphone to identify playing tracks
+- Library sync from Google Sheets
+- Manual song entry for custom requests
+- Tipping integration with Venmo, PayPal, and Cash App handles
+- Customizable event names (e.g., "Brandon's Birthday Party")
 
--   **Frontend:** React, Vite, Tailwind CSS, shadcn/ui.
--   **Backend:** Supabase (Database, Real-time, Edge Functions).
--   **Runtime:** Bun (recommended) or Node.js.
--   **APIs:** AudD (Lyrics & Song Recognition).
+### Visuals
+- Premium nightclub dark theme with neon purple accents
+- Responsive design for mobile and desktop
 
-## 🛠️ Local Setup
+## Tech Stack
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/andykumeda/vq
-    cd vq
-    ```
+- **Frontend:** React, Vite, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend:** Express.js, Node.js
+- **Database:** PostgreSQL with Drizzle ORM
+- **Runtime:** Bun (recommended) or Node.js
+- **APIs:** AudD (Lyrics & Song Recognition)
 
-2.  **Install dependencies:**
+## Environment Variables
+
+### Required
+- `DATABASE_URL` - PostgreSQL connection string (auto-configured on Replit)
+
+### Optional
+- `AUDD_API_TOKEN` - API token from audd.io for song recognition and lyrics features
+
+## Local Development
+
+1. **Install dependencies:**
     ```bash
     bun install
     ```
 
-3.  **Configure Environment Variables:**
-    Create a `.env` file in the root directory and add your keys:
-    ```env
-    VITE_SUPABASE_URL=your_supabase_url
-    VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
-    VITE_AUDD_API_TOKEN=your_audd_api_token
-    ```
-
-4.  **Start the development server:**
+2. **Set up the database:**
     ```bash
-    bun run dev
+    npm run db:push
     ```
-    Access the app at `http://localhost:8080`
 
-## 🌐 Deployment (Ubuntu + Nginx)
-
-To host VibeQueue on your own server:
-
-1.  **Build the project:**
+3. **Start the development server:**
     ```bash
-    bun run build
+    npm run dev
     ```
-2.  **Configure Nginx:**
-    Ensure your Nginx config handles SPA routing by adding `try_files`:
-    ```nginx
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    ```
-3.  **SSL:** It is highly recommended to use HTTPS (via Certbot) for secure tipping links.
 
-## 🔐 Security & Customization
+## Deployment
 
--   **DJ Console PIN:** The default PIN is `1234`. This can be changed in the DJ Settings modal.
--   **Payment Handles:** Configure your Venmo/PayPal usernames directly in the DJ Console settings or as overrides in the `.env` file.
+The app is configured for deployment on Replit:
+- **Build:** `npm run build` (creates frontend assets in `dist/public`)
+- **Run:** `bun server/index.ts` (runs TypeScript server directly with bun)
 
----
-Built with 💜 for the nightclub vibe.
+The backend serves both the API and static frontend assets in production.
+
+## Configuration
+
+- **DJ Console PIN:** Default is `1234`. Can be changed in DJ Settings.
+- **Payment Handles:** Configure Venmo/PayPal/Cash App usernames in DJ Console settings.
+- **Google Sheets Sync:** Supports tabs named: "Freestyle|Dance", "Hip Hop|Rap|Funk|R&B", "Rock", "New Wave", "Slow Jamz", "Disco", "Other"
+
+## API Endpoints
+
+- `GET /api/songs` - Get available songs (with search/genre filters)
+- `POST /api/songs` - Create a new song
+- `GET /api/genres` - Get unique genres
+- `GET /api/requests` - Get active requests
+- `POST /api/requests` - Create a new request
+- `PATCH /api/requests/:id` - Update request status
+- `GET /api/settings` - Get public settings
+- `POST /api/verify-pin` - Verify DJ PIN
+- `POST /api/update-settings` - Update settings
+- `POST /api/sync-google-sheets` - Sync song library from Google Sheets
+- `POST /api/recognize-song` - Recognize song from audio
+- `POST /api/get-lyrics` - Get lyrics for a song
