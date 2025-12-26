@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mic, Music, Search, Loader2 } from 'lucide-react';
+import { Mic, Music, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 
 interface ManualPlayModalProps {
   open: boolean;
@@ -49,35 +48,7 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
 
       recorder.onstop = async () => {
         stream.getTracks().forEach(track => track.stop());
-        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-        
-        // Convert to base64
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          const base64Audio = (reader.result as string).split(',')[1];
-          
-          toast.info('Analyzing audio...');
-          
-          try {
-            const { data, error } = await supabase.functions.invoke('recognize-song', {
-              body: { audio: base64Audio }
-            });
-
-            if (error) throw error;
-            
-            if (data.success && data.song) {
-              setTitle(data.song.title);
-              setArtist(data.song.artist);
-              toast.success(`Recognized: ${data.song.title} by ${data.song.artist}`);
-            } else {
-              toast.error('Could not recognize the song. Try again or enter manually.');
-            }
-          } catch (err: any) {
-            console.error('Recognition error:', err);
-            toast.error(err.message || 'Failed to recognize song');
-          }
-        };
-        reader.readAsDataURL(audioBlob);
+        toast.info('Song recognition requires an API key. Please enter the song details manually.');
         setIsListening(false);
       };
 
@@ -85,7 +56,6 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
       recorder.start();
       setIsListening(true);
       
-      // Stop after 10 seconds
       setTimeout(() => {
         if (recorder.state === 'recording') {
           recorder.stop();
@@ -117,7 +87,6 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Song Recognition */}
           <div className="p-4 rounded-lg bg-muted/50 border border-border">
             <p className="text-sm text-muted-foreground mb-3">
               Use your microphone to identify what's playing
@@ -126,6 +95,7 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
               onClick={isListening ? stopListening : startListening}
               variant={isListening ? "destructive" : "secondary"}
               className="w-full"
+              data-testid="button-listen-identify"
             >
               {isListening ? (
                 <>
@@ -152,7 +122,6 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
             </div>
           </div>
 
-          {/* Manual Entry */}
           <div className="space-y-3">
             <div>
               <Label htmlFor="title">Song Title</Label>
@@ -161,6 +130,7 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Enter song title"
+                data-testid="input-song-title"
               />
             </div>
             <div>
@@ -170,11 +140,12 @@ export function ManualPlayModal({ open, onClose, onPlay }: ManualPlayModalProps)
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
                 placeholder="Enter artist name"
+                data-testid="input-artist"
               />
             </div>
           </div>
 
-          <Button onClick={handleManualPlay} className="w-full">
+          <Button onClick={handleManualPlay} className="w-full" data-testid="button-set-now-playing">
             <Music className="w-4 h-4 mr-2" />
             Set as Now Playing
           </Button>

@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import type { Request } from '@/types/vibequeue';
 
 interface NotificationState {
@@ -13,57 +12,47 @@ export function useRequestNotifications(username: string | null) {
     rejectedRequest: null,
   });
   
-  // Track which requests we've already notified about
   const notifiedRequests = useRef<Set<string>>(new Set());
+  const previousRequests = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!username) return;
 
-    const channel = supabase
-      .channel('user-request-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'requests',
-        },
-        async (payload) => {
-          const updatedRequest = payload.new as any;
+    const checkForUpdates = async () => {
+      try {
+        const res = await fetch('/api/requests');
+        if (!res.ok) return;
+        
+        const requests = await res.json();
+        
+        for (const request of requests) {
+          if (request.requesterUsername !== username) continue;
           
-          // Only notify for this user's requests
-          if (updatedRequest.requester_username !== username) return;
+          const notificationKey = `${request.id}-${request.status}`;
+          const previousStatus = previousRequests.current.get(request.id);
           
-          // Check if we've already notified about this status change
-          const notificationKey = `${updatedRequest.id}-${updatedRequest.status}`;
-          if (notifiedRequests.current.has(notificationKey)) return;
-          
-          // Fetch the full request with song data
-          const { data: fullRequest, error } = await supabase
-            .from('requests')
-            .select(`
-              *,
-              song:songs(*)
-            `)
-            .eq('id', updatedRequest.id)
-            .single();
-          
-          if (error || !fullRequest) return;
-          
-          // Mark as notified
-          notifiedRequests.current.add(notificationKey);
-          
-          if (updatedRequest.status === 'playing') {
-            setNotification((prev) => ({ ...prev, playingRequest: fullRequest as Request }));
-          } else if (updatedRequest.status === 'rejected') {
-            setNotification((prev) => ({ ...prev, rejectedRequest: fullRequest as Request }));
+          if (previousStatus && previousStatus !== request.status && !notifiedRequests.current.has(notificationKey)) {
+            notifiedRequests.current.add(notificationKey);
+            
+            if (request.status === 'playing') {
+              setNotification((prev) => ({ ...prev, playingRequest: request }));
+            } else if (request.status === 'rejected') {
+              setNotification((prev) => ({ ...prev, rejectedRequest: request }));
+            }
           }
+          
+          previousRequests.current.set(request.id, request.status);
         }
-      )
-      .subscribe();
+      } catch (error) {
+        console.error('Error checking for updates:', error);
+      }
+    };
+
+    const interval = setInterval(checkForUpdates, 3000);
+    checkForUpdates();
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(interval);
     };
   }, [username]);
 

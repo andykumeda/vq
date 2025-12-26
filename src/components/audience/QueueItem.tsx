@@ -3,7 +3,6 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Request } from '@/types/vibequeue';
 
@@ -25,23 +24,6 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
 
     setIsLoadingLyrics(true);
     try {
-      // 1. Try via Edge Function first (best for security)
-      try {
-        const { data, error } = await supabase.functions.invoke('get-lyrics', {
-          body: { q_track: request.song?.title, q_artist: request.song?.artist }
-        });
-
-        if (!error && data?.success) {
-          setLyrics(data.lyrics);
-          setShowLyrics(true);
-          setIsLoadingLyrics(false);
-          return;
-        }
-      } catch (e) {
-        console.warn('Edge function failed, trying direct AudD call if token exists');
-      }
-
-      // 2. Fallback: Direct call to AudD if user has VITE_AUDD_API_TOKEN in .env
       const clientToken = import.meta.env.VITE_AUDD_API_TOKEN;
       if (clientToken) {
         const url = `https://api.audd.io/findLyrics/?api_token=${clientToken}&q=${encodeURIComponent(request.song?.artist + ' ' + request.song?.title)}`;
@@ -95,12 +77,15 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
   const config = statusConfig[request.status];
   const StatusIcon = config.icon;
 
+  const isTipped = (request as any).isTipped ?? (request as any).is_tipped;
+
   return (
     <div className="space-y-3">
       <Card
         className={`glass-card p-4 transition-all duration-300 ${
           isOwn ? 'border-primary/30' : ''
         } ${request.status === 'playing' ? 'animate-pulse-glow border-primary/50' : ''}`}
+        data-testid={`queue-item-${request.id}`}
       >
         <div className="flex items-center gap-4">
           <div
@@ -119,12 +104,12 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
               <h4 className="font-semibold text-foreground truncate">
                 {request.song?.title || 'Unknown Song'}
               </h4>
-              {request.is_tipped && (
+              {isTipped && (
                 <DollarSign className="w-4 h-4 text-warning flex-shrink-0" />
               )}
             </div>
             <p className="text-sm text-muted-foreground truncate">
-              {request.song?.artist || 'Unknown Artist'} • {request.requester_username}
+              {request.song?.artist || 'Unknown Artist'} • {(request as any).requesterUsername || (request as any).requester_username}
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -136,6 +121,7 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
                 className="h-7 text-[10px] uppercase tracking-wider text-primary hover:text-primary hover:bg-primary/10"
                 onClick={fetchLyrics}
                 disabled={isLoadingLyrics}
+                data-testid="button-lyrics"
               >
                 {isLoadingLyrics ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Languages className="w-3 h-3 mr-1" />}
                 Lyrics
@@ -150,8 +136,9 @@ export function QueueItem({ request, isOwn }: QueueItemProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="absolute top-2 right-2 h-8 w-8 text-muted-foreground hover:text-white"
+            className="absolute top-2 right-2 text-muted-foreground hover:text-white"
             onClick={() => setShowLyrics(false)}
+            data-testid="button-close-lyrics"
           >
             <X className="w-4 h-4" />
           </Button>

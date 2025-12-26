@@ -1,23 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import type { PaymentHandles } from '@/types/vibequeue';
+import { apiRequest } from '@/lib/queryClient';
 
 export function useSettings() {
   return useQuery({
-    queryKey: ['settings'],
+    queryKey: ['/api/settings'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('*');
-
-      if (error) throw error;
-
-      const settings: Record<string, string> = {};
-      data.forEach((s) => {
-        settings[s.key] = s.value;
-      });
-
-      return settings;
+      const res = await fetch('/api/settings');
+      if (!res.ok) throw new Error('Failed to fetch settings');
+      return res.json() as Promise<Record<string, string>>;
     },
   });
 }
@@ -26,9 +17,9 @@ export function usePaymentHandles() {
   const { data: settings, isLoading } = useSettings();
 
   const handles: PaymentHandles = {
-    venmo: import.meta.env.VITE_VENMO_HANDLE || settings?.venmo_handle || '',
-    paypal: import.meta.env.VITE_PAYPAL_HANDLE || settings?.paypal_handle || '',
-    cashapp: import.meta.env.VITE_CASHAPP_HANDLE || settings?.cashapp_handle || '',
+    venmo: settings?.venmo_handle || '',
+    paypal: settings?.paypal_handle || '',
+    cashapp: settings?.cashapp_handle || '',
   };
 
   return { handles, isLoading };
@@ -39,22 +30,13 @@ export function useUpdateSetting() {
 
   return useMutation({
     mutationFn: async ({ key, value, pin }: { key: string; value: string; pin: string }) => {
-      try {
-        const { data, error } = await supabase.functions.invoke('update-settings', {
-          body: { key, value, pin }
-        });
-
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
-
-        return data;
-      } catch (err: any) {
-        console.error('Settings update error:', err);
-        throw err;
-      }
+      const res = await apiRequest('POST', '/api/update-settings', { key, value, pin });
+      const data = await res.json();
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/settings'] });
     },
   });
 }
@@ -62,19 +44,35 @@ export function useUpdateSetting() {
 export function useVerifyPin() {
   return async (pin: string): Promise<boolean> => {
     try {
-      const { data, error } = await supabase.functions.invoke('verify-dj-pin', {
-        body: { pin }
+      const res = await fetch('/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
       });
       
-      if (error) {
-        console.error('PIN verification error:', error);
-        return false;
-      }
-      
+      if (!res.ok) return false;
+      const data = await res.json();
       return data?.valid === true;
     } catch (error) {
       console.error('PIN verification error:', error);
       return false;
     }
   };
+}
+
+export function useSyncGoogleSheets() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (pin: string) => {
+      const res = await apiRequest('POST', '/api/sync-google-sheets', { pin });
+      const data = await res.json();
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/songs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/genres'] });
+    },
+  });
 }

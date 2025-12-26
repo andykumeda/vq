@@ -1,47 +1,49 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import type { Request, RequestStatus } from '@/types/vibequeue';
-import { useEffect } from 'react';
+import type { RequestStatus } from '@/types/vibequeue';
+import { useEffect, useRef } from 'react';
+import { apiRequest } from '@/lib/queryClient';
+
+interface RequestWithSong {
+  id: string;
+  songId: string;
+  requesterUsername: string;
+  status: RequestStatus;
+  isTipped: boolean;
+  createdAt: string;
+  updatedAt: string;
+  song: {
+    id: string;
+    title: string;
+    artist: string;
+    genre: string | null;
+    isAvailable: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
 
 export function useRequests() {
   const queryClient = useQueryClient();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const query = useQuery({
-    queryKey: ['requests'],
+    queryKey: ['/api/requests'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('requests')
-        .select(`
-          *,
-          song:songs(*)
-        `)
-        .in('status', ['pending', 'next_up', 'playing'])
-        .order('created_at', { ascending: true });
-
-      if (error) throw error;
-      return data as Request[];
+      const res = await fetch('/api/requests');
+      if (!res.ok) throw new Error('Failed to fetch requests');
+      return res.json() as Promise<RequestWithSong[]>;
     },
   });
 
-  // Real-time subscription
   useEffect(() => {
-    const channel = supabase
-      .channel('requests-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'requests',
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['requests'] });
-        }
-      )
-      .subscribe();
+    intervalRef.current = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
+    }, 3000);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, [queryClient]);
 
@@ -61,21 +63,15 @@ export function useCreateRequest() {
       username: string;
       isTipped: boolean;
     }) => {
-      const { data, error } = await supabase
-        .from('requests')
-        .insert({
-          song_id: songId,
-          requester_username: username,
-          is_tipped: isTipped,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      const res = await apiRequest('POST', '/api/requests', {
+        songId,
+        requesterUsername: username,
+        isTipped,
+      });
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
     },
   });
 }
@@ -95,35 +91,22 @@ export function useCreateCustomRequest() {
       username: string;
       isTipped: boolean;
     }) => {
-      // First, create the song with is_available = false (custom request)
-      const { data: song, error: songError } = await supabase
-        .from('songs')
-        .insert({
-          title,
-          artist,
-          is_available: false,
-        })
-        .select()
-        .single();
+      const songRes = await apiRequest('POST', '/api/songs', {
+        title,
+        artist,
+        isAvailable: false,
+      });
+      const song = await songRes.json();
 
-      if (songError) throw songError;
-
-      // Then create the request
-      const { data, error } = await supabase
-        .from('requests')
-        .insert({
-          song_id: song.id,
-          requester_username: username,
-          is_tipped: isTipped,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      const res = await apiRequest('POST', '/api/requests', {
+        songId: song.id,
+        requesterUsername: username,
+        isTipped,
+      });
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
     },
   });
 }
@@ -139,32 +122,20 @@ export function useUpdateRequestStatus() {
       requestId: string;
       status: RequestStatus;
     }) => {
-      const { data, error } = await supabase
-        .from('requests')
-        .update({ status })
-        .eq('id', requestId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
+      const res = await apiRequest('PATCH', `/api/requests/${requestId}`, { status });
+      return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
     },
   });
 }
 
 export function useCheckDuplicateRequest() {
   return async (songId: string): Promise<boolean> => {
-    const { data, error } = await supabase
-      .from('requests')
-      .select('id')
-      .eq('song_id', songId)
-      .in('status', ['pending', 'next_up', 'playing'])
-      .limit(1);
-
-    if (error) throw error;
-    return data.length > 0;
+    const res = await fetch(`/api/requests/check-duplicate/${songId}`);
+    if (!res.ok) throw new Error('Failed to check duplicate');
+    const data = await res.json();
+    return data.isDuplicate;
   };
 }

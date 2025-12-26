@@ -3,26 +3,25 @@ import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus } from 'lucide
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useRequests, useUpdateRequestStatus } from '@/hooks/useRequests';
-import { useSettings, useVerifyPin } from '@/hooks/useSettings';
+import { useSettings, useVerifyPin, useSyncGoogleSheets } from '@/hooks/useSettings';
 import { PinModal } from '@/components/dj/PinModal';
 import { RequestRow } from '@/components/dj/RequestRow';
 import { SettingsModal } from '@/components/dj/SettingsModal';
 import { ManualPlayModal } from '@/components/dj/ManualPlayModal';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 
 export default function DJConsole() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [djPin, setDjPin] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isManualPlayOpen, setIsManualPlayOpen] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [manualNowPlaying, setManualNowPlaying] = useState<{ title: string; artist: string } | null>(null);
 
   const { data: requests, isLoading, refetch } = useRequests();
   const { data: settings } = useSettings();
   const updateStatus = useUpdateRequestStatus();
   const verifyPin = useVerifyPin();
+  const syncLibrary = useSyncGoogleSheets();
 
   const handleAccept = async (requestId: string) => {
     try {
@@ -57,19 +56,12 @@ export default function DJConsole() {
   };
 
   const handleSyncLibrary = async () => {
-    setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-google-sheets', {
-        body: { pin: djPin }
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast.success(`Synced ${data?.count || 0} songs from Google Sheets`);
+      const result = await syncLibrary.mutateAsync(djPin);
+      toast.success(`Synced ${result?.count || 0} songs from Google Sheets`);
       refetch();
     } catch (error: any) {
       toast.error(error.message || 'Failed to sync library');
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -87,15 +79,14 @@ export default function DJConsole() {
     setManualNowPlaying(null);
   };
 
-  const nowPlaying = requests?.find((r) => r.status === 'playing');
-  const upNext = requests?.filter((r) => r.status === 'next_up') || [];
-  const pending = requests?.filter((r) => r.status === 'pending') || [];
+  const nowPlaying = requests?.find((r: any) => r.status === 'playing');
+  const upNext = requests?.filter((r: any) => r.status === 'next_up') || [];
+  const pending = requests?.filter((r: any) => r.status === 'pending') || [];
 
-  // Sort pending: tipped first, then by created_at
-  const sortedPending = [...pending].sort((a, b) => {
-    if (a.is_tipped && !b.is_tipped) return -1;
-    if (!a.is_tipped && b.is_tipped) return 1;
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  const sortedPending = [...pending].sort((a: any, b: any) => {
+    if (a.isTipped && !b.isTipped) return -1;
+    if (!a.isTipped && b.isTipped) return 1;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 
   const eventName = settings?.event_name || 'VibeQueue';
@@ -108,10 +99,9 @@ export default function DJConsole() {
         onSuccess={handlePinSuccess}
       />
 
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold neon-text-purple">{eventName}</h1>
               <p className="text-sm text-muted-foreground">DJ Console</p>
@@ -121,15 +111,17 @@ export default function DJConsole() {
                 variant="outline"
                 size="sm"
                 onClick={handleSyncLibrary}
-                disabled={isSyncing}
+                disabled={syncLibrary.isPending}
+                data-testid="button-sync-library"
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${isSyncing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncLibrary.isPending ? 'animate-spin' : ''}`} />
                 Sync Library
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setIsSettingsOpen(true)}
+                data-testid="button-settings"
               >
                 <Settings className="w-4 h-4 mr-2" />
                 Settings
@@ -139,7 +131,6 @@ export default function DJConsole() {
         </div>
       </header>
 
-      {/* Stats Bar */}
       <div className="bg-muted/30 border-b border-border/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center gap-6">
@@ -165,11 +156,9 @@ export default function DJConsole() {
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-        {/* Now Playing */}
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <div className="w-3 h-3 bg-primary rounded-full animate-pulse" />
               Now Playing
@@ -178,6 +167,7 @@ export default function DJConsole() {
               variant="outline"
               size="sm"
               onClick={() => setIsManualPlayOpen(true)}
+              data-testid="button-manual-play"
             >
               <Plus className="w-4 h-4 mr-2" />
               Play Song
@@ -193,7 +183,7 @@ export default function DJConsole() {
             />
           ) : manualNowPlaying ? (
             <Card className="glass-card p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
                     <Music className="w-6 h-6 text-primary" />
@@ -220,7 +210,6 @@ export default function DJConsole() {
           )}
         </section>
 
-        {/* Up Next */}
         {upNext.length > 0 && (
           <section>
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -228,7 +217,7 @@ export default function DJConsole() {
               Up Next ({upNext.length})
             </h2>
             <div className="space-y-3">
-              {upNext.map((request) => (
+              {upNext.map((request: any) => (
                 <RequestRow
                   key={request.id}
                   request={request}
@@ -241,7 +230,6 @@ export default function DJConsole() {
           </section>
         )}
 
-        {/* Pending Requests */}
         <section>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <ListMusic className="w-5 h-5" />
@@ -263,7 +251,7 @@ export default function DJConsole() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {sortedPending.map((request) => (
+              {sortedPending.map((request: any) => (
                 <RequestRow
                   key={request.id}
                   request={request}

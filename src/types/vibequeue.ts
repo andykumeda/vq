@@ -5,28 +5,36 @@ export interface Song {
   title: string;
   artist: string;
   genre: string | null;
-  is_available: boolean;
-  created_at: string;
-  updated_at: string;
+  isAvailable: boolean;
+  createdAt: string;
+  updatedAt: string;
+  is_available?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Request {
   id: string;
-  song_id: string;
-  requester_username: string;
+  songId: string;
+  requesterUsername: string;
   status: RequestStatus;
-  is_tipped: boolean;
-  created_at: string;
-  updated_at: string;
+  isTipped: boolean;
+  createdAt: string;
+  updatedAt: string;
   song?: Song;
+  song_id?: string;
+  requester_username?: string;
+  is_tipped?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Settings {
   id: string;
   key: string;
   value: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PaymentHandles {
