@@ -54,13 +54,23 @@ VibeQueue allows audiences to browse a song library and request songs for the DJ
 - `POST /api/update-settings` - Update settings (requires PIN)
 - `POST /api/sync-google-sheets` - Sync song library from Google Sheets
 
+## Environment Variables
+
+Required:
+- `DATABASE_URL` - PostgreSQL connection string (auto-configured by Replit)
+
+Optional:
+- `AUDD_API_TOKEN` - API token from audd.io for song recognition and lyrics features
+
 ## User Preferences
 
 - Default DJ PIN: 1234
 - Dark theme by default
+- Uses bun for running/building (not npm)
 
 ## Recent Changes
 
 - December 2024: Migrated from Supabase to Replit's built-in PostgreSQL database
 - Converted Supabase Edge Functions to Express API routes
 - Removed Supabase client dependency, using direct API calls
+- Switched from npm to bun for better performance
