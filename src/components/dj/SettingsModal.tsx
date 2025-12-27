@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Settings, Save, Loader2 } from 'lucide-react';
+import { Settings, Save, Loader2, QrCode, Printer } from 'lucide-react';
 import { useSettings, useUpdateSetting } from '@/hooks/useSettings';
 import { toast } from 'sonner';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface SettingsModalProps {
   open: boolean;
@@ -17,6 +18,79 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
   const { data: settings } = useSettings();
   const updateSetting = useUpdateSetting();
   const [isSaving, setIsSaving] = useState(false);
+  const qrRef = useRef<HTMLDivElement>(null);
+
+  const handlePrintQR = () => {
+    const eventName = formData.event_name || settings?.event_name || 'VibeQueue';
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print QR code');
+      return;
+    }
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QR Code - ${eventName}</title>
+        <style>
+          body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background: white;
+          }
+          .container {
+            text-align: center;
+            padding: 40px;
+          }
+          h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            color: #1a1a1a;
+          }
+          .subtitle {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 32px;
+          }
+          .qr-container {
+            padding: 24px;
+            background: white;
+            border: 2px solid #e5e5e5;
+            border-radius: 16px;
+            display: inline-block;
+          }
+          .url {
+            margin-top: 24px;
+            font-size: 20px;
+            color: #7c3aed;
+            font-weight: 600;
+          }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>${eventName}</h1>
+          <p class="subtitle">Scan to request songs</p>
+          <div class="qr-container">
+            ${qrRef.current?.innerHTML || ''}
+          </div>
+          <p class="url">songtoplay.app</p>
+        </div>
+        <script>window.onload = function() { window.print(); }</script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   const [formData, setFormData] = useState({
     dj_pin: '',
@@ -162,6 +236,36 @@ export function SettingsModal({ open, onClose, djPin }: SettingsModalProps) {
                   placeholder="$yourhandle"
                   className="mt-1"
                 />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border/50 pt-4">
+            <h4 className="text-sm font-medium mb-4 flex items-center gap-2">
+              <QrCode className="w-4 h-4" />
+              QR Code for Audience
+            </h4>
+            <div className="flex items-center gap-4">
+              <div ref={qrRef} className="bg-white p-3 rounded-lg">
+                <QRCodeSVG 
+                  value="https://songtoplay.app" 
+                  size={120}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Print this QR code and display it at your venue. Guests can scan it to request songs.
+                </p>
+                <Button 
+                  variant="outline" 
+                  onClick={handlePrintQR}
+                  data-testid="button-print-qr"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print QR Code
+                </Button>
               </div>
             </div>
           </div>
