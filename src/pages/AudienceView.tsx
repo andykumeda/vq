@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Music, ListMusic, PlusCircle, ArrowUp } from 'lucide-react';
+import { Music, ListMusic, PlusCircle, ArrowUp, History } from 'lucide-react';
 import { useUsername } from '@/hooks/useUsername';
 import { useSongs } from '@/hooks/useSongs';
 import { useGenres } from '@/hooks/useGenres';
-import { useRequests, useCreateRequest, useCreateCustomRequest, useCheckDuplicateRequest } from '@/hooks/useRequests';
+import { useRequests, usePlayedRequests, useCreateRequest, useCreateCustomRequest, useCheckDuplicateRequest } from '@/hooks/useRequests';
 import { usePaymentHandles, useSettings } from '@/hooks/useSettings';
 import { useRequestNotifications } from '@/hooks/useRequestNotifications';
 import { UsernameModal } from '@/components/audience/UsernameModal';
@@ -45,6 +45,7 @@ export default function AudienceView() {
   const { data: genres = [] } = useGenres();
   const { data: songs, isLoading: songsLoading } = useSongs(searchQuery, selectedGenres);
   const { data: requests } = useRequests();
+  const { data: playedRequests } = usePlayedRequests(10);
   const { data: settings } = useSettings();
   const { handles: paymentHandles } = usePaymentHandles();
   const createRequest = useCreateRequest();
@@ -279,6 +280,32 @@ export default function AudienceView() {
                     Be the first to request a song!
                   </p>
                 </div>
+              )}
+
+              {playedRequests && playedRequests.length > 0 && (
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                    <History className="w-4 h-4" />
+                    Recently Played
+                  </h3>
+                  <div className="space-y-2">
+                    {playedRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 opacity-60"
+                        data-testid={`played-item-${request.id}`}
+                      >
+                        <div className="w-10 h-10 bg-muted rounded-md flex items-center justify-center">
+                          <Music className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{request.song.title}</p>
+                          <p className="text-xs text-muted-foreground truncate">{request.song.artist}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               )}
             </div>
           </TabsContent>

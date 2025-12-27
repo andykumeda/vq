@@ -9,6 +9,7 @@ interface RequestWithSong {
   requesterUsername: string;
   status: RequestStatus;
   isTipped: boolean;
+  position: number | null;
   createdAt: string;
   updatedAt: string;
   song: {
@@ -186,6 +187,48 @@ export function useUpdateSong() {
       artist: string;
     }) => {
       const res = await apiRequest('PATCH', `/api/songs/${songId}`, { title, artist });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
+    },
+  });
+}
+
+export function usePlayedRequests(limit: number = 10) {
+  const queryClient = useQueryClient();
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const query = useQuery({
+    queryKey: ['/api/requests/played', limit],
+    queryFn: async () => {
+      const res = await fetch(`/api/requests/played?limit=${limit}`);
+      if (!res.ok) throw new Error('Failed to fetch played requests');
+      return res.json() as Promise<RequestWithSong[]>;
+    },
+  });
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ['/api/requests/played', limit] });
+    }, 3000);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [queryClient, limit]);
+
+  return query;
+}
+
+export function useReorderRequests() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (positions: { id: string; position: number }[]) => {
+      const res = await apiRequest('POST', '/api/requests/reorder', { positions });
       return res.json();
     },
     onSuccess: () => {
