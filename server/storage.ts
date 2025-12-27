@@ -9,9 +9,11 @@ export interface IStorage {
   updateSong(id: string, data: { title?: string; artist?: string }): Promise<Song | null>;
   
   getRequests(statusFilters?: RequestStatus[]): Promise<RequestWithSong[]>;
+  getPlayedRequests(limit?: number): Promise<RequestWithSong[]>;
   getRequestById(id: string): Promise<RequestWithSong | null>;
   createRequest(data: InsertRequest): Promise<Request>;
   updateRequestStatus(id: string, status: RequestStatus): Promise<Request | null>;
+  updateRequestPositions(positions: { id: string; position: number }[]): Promise<void>;
   checkDuplicateRequest(songId: string): Promise<boolean>;
   
   getSettings(): Promise<Record<string, string>>;
@@ -82,6 +84,7 @@ export class DatabaseStorage implements IStorage {
         requesterUsername: requests.requesterUsername,
         status: requests.status,
         isTipped: requests.isTipped,
+        position: requests.position,
         createdAt: requests.createdAt,
         updatedAt: requests.updatedAt,
         song: songs,
@@ -89,7 +92,29 @@ export class DatabaseStorage implements IStorage {
       .from(requests)
       .innerJoin(songs, eq(requests.songId, songs.id))
       .where(inArray(requests.status, statusFilters))
-      .orderBy(asc(requests.createdAt));
+      .orderBy(asc(requests.position), asc(requests.createdAt));
+    
+    return result;
+  }
+
+  async getPlayedRequests(limit: number = 10): Promise<RequestWithSong[]> {
+    const result = await db
+      .select({
+        id: requests.id,
+        songId: requests.songId,
+        requesterUsername: requests.requesterUsername,
+        status: requests.status,
+        isTipped: requests.isTipped,
+        position: requests.position,
+        createdAt: requests.createdAt,
+        updatedAt: requests.updatedAt,
+        song: songs,
+      })
+      .from(requests)
+      .innerJoin(songs, eq(requests.songId, songs.id))
+      .where(eq(requests.status, "played"))
+      .orderBy(desc(requests.updatedAt))
+      .limit(limit);
     
     return result;
   }
@@ -141,6 +166,15 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     
     return result.length > 0;
+  }
+
+  async updateRequestPositions(positions: { id: string; position: number }[]): Promise<void> {
+    for (const { id, position } of positions) {
+      await db
+        .update(requests)
+        .set({ position, updatedAt: new Date() })
+        .where(eq(requests.id, id));
+    }
   }
 
   async getSettings(): Promise<Record<string, string>> {

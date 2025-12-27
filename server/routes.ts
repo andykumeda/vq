@@ -164,6 +164,31 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  app.get("/api/requests/played", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const playedRequests = await storage.getPlayedRequests(limit);
+      res.json(playedRequests);
+    } catch (error) {
+      console.error("Error fetching played requests:", error);
+      res.status(500).json({ error: "Failed to fetch played requests" });
+    }
+  });
+
+  app.post("/api/requests/reorder", async (req, res) => {
+    try {
+      const { positions } = req.body;
+      if (!positions || !Array.isArray(positions)) {
+        return res.status(400).json({ error: "Positions array is required" });
+      }
+      await storage.updateRequestPositions(positions);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering requests:", error);
+      res.status(500).json({ error: "Failed to reorder requests" });
+    }
+  });
+
   app.get("/api/settings", async (req, res) => {
     try {
       const allSettings = await storage.getSettings();
