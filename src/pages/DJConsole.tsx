@@ -1,14 +1,77 @@
 import { useState } from 'react';
-import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus } from 'lucide-react';
+import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useRequests, useUpdateRequestStatus, useCreateManualPlay, useUpdateSong } from '@/hooks/useRequests';
+import { useRequests, useUpdateRequestStatus, useCreateManualPlay, useUpdateSong, useReorderRequests } from '@/hooks/useRequests';
 import { useSettings, useVerifyPin, useSyncGoogleSheets } from '@/hooks/useSettings';
 import { PinModal } from '@/components/dj/PinModal';
 import { RequestRow } from '@/components/dj/RequestRow';
 import { SettingsModal } from '@/components/dj/SettingsModal';
 import { ManualPlayModal } from '@/components/dj/ManualPlayModal';
 import { toast } from 'sonner';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+interface SortableRequestRowProps {
+  request: any;
+  onAccept: () => void;
+  onReject: () => void;
+  onMarkPlayed: () => void;
+  onUpdateSong: (songId: string, title: string, artist: string) => void;
+}
+
+function SortableRequestRow({ request, onAccept, onReject, onMarkPlayed, onUpdateSong }: SortableRequestRowProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: request.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-center gap-2">
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing p-2 text-muted-foreground hover:text-foreground"
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
+      <div className="flex-1">
+        <RequestRow
+          request={request}
+          onAccept={onAccept}
+          onReject={onReject}
+          onMarkPlayed={onMarkPlayed}
+          onUpdateSong={onUpdateSong}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function DJConsole() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -23,6 +86,14 @@ export default function DJConsole() {
   const syncLibrary = useSyncGoogleSheets();
   const createManualPlay = useCreateManualPlay();
   const updateSong = useUpdateSong();
+  const reorderRequests = useReorderRequests();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const handleUpdateSong = async (songId: string, title: string, artist: string) => {
     try {
@@ -86,6 +157,29 @@ export default function DJConsole() {
       toast.success(`Now playing: ${song.title} by ${song.artist}`);
     } catch (error) {
       toast.error('Failed to set now playing');
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) return;
+    
+    const oldIndex = upNext.findIndex((r: any) => r.id === active.id);
+    const newIndex = upNext.findIndex((r: any) => r.id === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+    
+    const reorderedItems = arrayMove(upNext, oldIndex, newIndex);
+    const positions = reorderedItems.map((item: any, index: number) => ({
+      id: item.id,
+      position: index,
+    }));
+    
+    try {
+      await reorderRequests.mutateAsync(positions);
+    } catch (error) {
+      toast.error('Failed to reorder queue');
     }
   };
 
@@ -208,19 +302,31 @@ export default function DJConsole() {
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Play className="w-5 h-5 text-secondary" />
               Up Next ({upNext.length})
+              <span className="text-xs font-normal text-muted-foreground ml-2">Drag to reorder</span>
             </h2>
-            <div className="space-y-3">
-              {upNext.map((request: any) => (
-                <RequestRow
-                  key={request.id}
-                  request={request}
-                  onAccept={() => {}}
-                  onReject={() => {}}
-                  onMarkPlayed={() => handleMarkPlayed(request.id, request.status)}
-                  onUpdateSong={handleUpdateSong}
-                />
-              ))}
-            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={upNext.map((r: any) => r.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-3">
+                  {upNext.map((request: any) => (
+                    <SortableRequestRow
+                      key={request.id}
+                      request={request}
+                      onAccept={() => {}}
+                      onReject={() => {}}
+                      onMarkPlayed={() => handleMarkPlayed(request.id, request.status)}
+                      onUpdateSong={handleUpdateSong}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           </section>
         )}
 
