@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, timestamp, uuid, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, uuid, pgEnum, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -20,6 +20,7 @@ export const requests = pgTable("requests", {
   requesterUsername: text("requester_username").notNull(),
   status: requestStatusEnum("status").notNull().default("pending"),
   isTipped: boolean("is_tipped").notNull().default(false),
+  position: integer("position").default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
