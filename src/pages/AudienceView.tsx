@@ -136,8 +136,8 @@ export default function AudienceView() {
       {/* Main Content */}
       <main className="pb-20">
         {nowPlaying && (
-          <section className="border-b border-border/50 bg-gradient-to-b from-primary/5 to-transparent">
-            <div className="p-4">
+          <section className="sticky top-[57px] z-30 border-b border-border/50 bg-background/95 backdrop-blur-xl">
+            <div className="p-4 bg-gradient-to-b from-primary/10 to-primary/5">
               <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
                 <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
                 Now Playing
