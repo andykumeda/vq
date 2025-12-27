@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus, GripVertical } from 'lucide-react';
+import { Settings, RefreshCw, Music, ListMusic, Play, Clock, Plus, GripVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { useRequests, useUpdateRequestStatus, useCreateManualPlay, useUpdateSong, useReorderRequests } from '@/hooks/useRequests';
+import { useRequests, useUpdateRequestStatus, useCreateManualPlay, useUpdateSong, useReorderRequests, useClearHistory } from '@/hooks/useRequests';
 import { useSettings, useVerifyPin, useSyncGoogleSheets } from '@/hooks/useSettings';
 import { PinModal } from '@/components/dj/PinModal';
 import { RequestRow } from '@/components/dj/RequestRow';
@@ -87,6 +87,7 @@ export default function DJConsole() {
   const createManualPlay = useCreateManualPlay();
   const updateSong = useUpdateSong();
   const reorderRequests = useReorderRequests();
+  const clearHistory = useClearHistory();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -143,6 +144,18 @@ export default function DJConsole() {
       refetch();
     } catch (error: any) {
       toast.error(error.message || 'Failed to sync library');
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!confirm('Are you sure you want to clear all played history? This cannot be undone.')) {
+      return;
+    }
+    try {
+      const result = await clearHistory.mutateAsync(djPin);
+      toast.success(`Cleared ${result?.count || 0} played songs from history`);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to clear history');
     }
   };
 
@@ -220,6 +233,16 @@ export default function DJConsole() {
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${syncLibrary.isPending ? 'animate-spin' : ''}`} />
                 Sync Library
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearHistory}
+                disabled={clearHistory.isPending}
+                data-testid="button-clear-history"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear History
               </Button>
               <Button
                 variant="outline"

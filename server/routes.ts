@@ -189,6 +189,26 @@ export async function registerRoutes(app: Express): Promise<void> {
     }
   });
 
+  app.delete("/api/requests/history", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      if (!pin || typeof pin !== "string") {
+        return res.status(400).json({ error: "PIN is required" });
+      }
+      
+      const storedPin = await storage.getSetting("dj_pin");
+      if (storedPin !== pin) {
+        return res.status(401).json({ error: "Invalid PIN" });
+      }
+      
+      const count = await storage.clearPlayedRequests();
+      res.json({ success: true, count });
+    } catch (error) {
+      console.error("Error clearing history:", error);
+      res.status(500).json({ error: "Failed to clear history" });
+    }
+  });
+
   app.get("/api/settings", async (req, res) => {
     try {
       const allSettings = await storage.getSettings();

@@ -236,3 +236,18 @@ export function useReorderRequests() {
     },
   });
 }
+
+export function useClearHistory() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (pin: string) => {
+      const res = await apiRequest('DELETE', '/api/requests/history', { pin });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/requests/played'] });
+    },
+  });
+}

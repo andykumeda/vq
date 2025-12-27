@@ -90,3 +90,4 @@ The backend serves both the API and the static frontend assets in production.
 - Added "Recently Played" section to audience queue view showing last 10 played songs
 - Added drag-and-drop reordering for DJ Console "Up Next" queue using @dnd-kit
 - Added position column to requests table for queue ordering
+- Added "Clear History" button in DJ Console to delete all played requests

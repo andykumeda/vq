@@ -15,6 +15,7 @@ export interface IStorage {
   updateRequestStatus(id: string, status: RequestStatus): Promise<Request | null>;
   updateRequestPositions(positions: { id: string; position: number }[]): Promise<void>;
   checkDuplicateRequest(songId: string): Promise<boolean>;
+  clearPlayedRequests(): Promise<number>;
   
   getSettings(): Promise<Record<string, string>>;
   getSetting(key: string): Promise<string | null>;
@@ -127,6 +128,7 @@ export class DatabaseStorage implements IStorage {
         requesterUsername: requests.requesterUsername,
         status: requests.status,
         isTipped: requests.isTipped,
+        position: requests.position,
         createdAt: requests.createdAt,
         updatedAt: requests.updatedAt,
         song: songs,
@@ -175,6 +177,14 @@ export class DatabaseStorage implements IStorage {
         .set({ position, updatedAt: new Date() })
         .where(eq(requests.id, id));
     }
+  }
+
+  async clearPlayedRequests(): Promise<number> {
+    const result = await db
+      .delete(requests)
+      .where(eq(requests.status, "played"))
+      .returning({ id: requests.id });
+    return result.length;
   }
 
   async getSettings(): Promise<Record<string, string>> {
