@@ -87,3 +87,6 @@ The backend serves both the API and the static frontend assets in production.
 - Configured deployment to run TypeScript server directly with bun
 - Fixed manual play feature: DJ can now manually set a song as "now playing" and it persists to the database, so the audience can see it in real-time
 - Fixed song recognition feature: Increased server body limit to 10MB for audio uploads, fixed API endpoint routing and audio format handling (webm/opus → ogg)
+- Added "Recently Played" section to audience queue view showing last 10 played songs
+- Added drag-and-drop reordering for DJ Console "Up Next" queue using @dnd-kit
+- Added position column to requests table for queue ordering
