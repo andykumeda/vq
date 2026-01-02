@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useSettings } from "@/hooks/useSettings";
-import { Music, Music2, Play, Sparkles, MessageSquareHeart } from "lucide-react";
+import { Music, Music2, Play, Sparkles, MessageSquareHeart, QrCode } from "lucide-react";
+import { QRCodeSVG } from 'qrcode.react';
 
 const Index = () => {
   const { data: settings } = useSettings();
@@ -69,6 +70,30 @@ const Index = () => {
         <p className="text-xs text-muted-foreground/50 pt-8 uppercase tracking-widest">
           Powering the vibe at {eventName}
         </p>
+
+        {/* QR Code Section */}
+        <div className="pt-12 pb-8 animate-fade-in" style={{ animationDelay: '400ms' }}>
+          <div className="glass-card p-8 rounded-3xl border-primary/20 inline-block">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="flex items-center gap-2 text-sm font-bold text-primary uppercase tracking-wider">
+                <QrCode className="w-4 h-4" />
+                Share the Vibe
+              </div>
+              <div className="bg-white p-4 rounded-2xl shadow-2xl">
+                <QRCodeSVG
+                  value="https://songtoplay.app"
+                  size={160}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+              <div className="text-center space-y-1">
+                <p className="text-lg font-bold">songtoplay.app</p>
+                <p className="text-sm text-muted-foreground">Scan to start requesting</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
